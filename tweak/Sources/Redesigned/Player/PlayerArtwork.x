@@ -1,6 +1,6 @@
 // Player redesign: the cover sits on the field with continuous corners and a soft shadow, and shrinks
-// back while playback is paused, the way the Music app's does; the lyric preview under it is gone, and the
-// cover takes the room it left.
+// back while playback is paused, the way the Music app's does. Spotify's lyric preview under it, and the cover's size
+// beside it, are Spotify's, as its own lyrics setting has them.
 //
 // Tree (trees/clean/player/01.txt:36-43): CoverArtCellImpl > ... > CoverArtTiltView 354x354 > an
 // ElementView the same size > ImageViewProxy > Encore.ImageView (clips) > UIImageView, with
@@ -244,48 +244,10 @@ static void watchHold(UIView *tilt) {
     objc_setAssociatedObject(tilt, &kHoldKey, hold, OBJC_ASSOCIATION_ASSIGN);
 }
 
-#pragma mark - the cover's room
-
-// Spotify's cell keeps room under the cover for the lyric preview even with the preview gone, so a track
-// with lyrics had a smaller cover with a blank band under it (issue #77). The preview takes no room
-// (below), and the tilt view takes the largest square of the plain view it sits in (01.txt:35), centered.
-// Bounds and a center, not a frame, since the tilt view carries Spotify's tilt while the cover is inspected.
-// A square under kCoverMinWidth is left as it is, so no small cover grows.
-static void fillRoom(UIView *tilt) {
-    CGRect room = tilt.superview.bounds;
-    CGFloat side = MIN(room.size.width, room.size.height);
-    if (side < kCoverMinWidth) return;
-    // Found by its size while that is still the tilt view's.
-    coverIn(tilt);
-    CGPoint origin = CGPointMake(round(CGRectGetMinX(room) + (room.size.width - side) / 2),
-                                 round(CGRectGetMinY(room) + (room.size.height - side) / 2));
-    CGRect bounds = (CGRect){tilt.bounds.origin, CGSizeMake(side, side)};
-    CGPoint middle = CGPointMake(origin.x + side / 2, origin.y + side / 2);
-    if (CGRectEqualToRect(tilt.bounds, bounds) && CGPointEqualToPoint(tilt.center, middle)) return;
-    tilt.bounds = bounds;
-    tilt.center = middle;
-    [tilt setNeedsLayout];
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ SGLog(@"redesign player: the cover fills its room, %.0fpt in %@", side, NSStringFromCGRect(room)); });
-}
-
-%hook _TtC28NowPlaying_ContentLayersImpl16CoverArtCellImpl
-- (void)layoutSubviews {
-    %orig;
-    static Class tiltClass;
-    if (!tiltClass) tiltClass = NSClassFromString(@"_TtC35CreativeWorkCommons_CoverArtTiltKit16CoverArtTiltView");
-    SGForEachView((UIView *)self, ^(UIView *view) {
-        if ([view isKindOfClass:tiltClass]) fillRoom(view);
-    });
-}
-%end
-
 %hook _TtC35CreativeWorkCommons_CoverArtTiltKit16CoverArtTiltView
 - (void)layoutSubviews {
     UIView *tilt = (UIView *)self;
     BOOL player = inCoverCell(tilt);
-    // Again here, for a pass of Spotify's that sizes the tilt view without the cell laying out.
-    if (player) fillRoom(tilt);
     %orig;
     if (tilt.bounds.size.width < kCoverMinWidth || !player) return;
     UIView *cover = coverIn(tilt);
@@ -364,27 +326,6 @@ static UIView *coverOfImage(UIView *image) {
 }
 %end
 
-// Spotify shows and hides the preview as lyrics come and go; it stays hidden, the way
-// Native/Player/PlayerDeclutter.x has shipped it (its parent is a plain view, 01.txt:35, not a stack),
-// and it takes no room either, whatever size it is asked for or given.
-%hook _TtC22Lyrics_NPVContainerKit19LyricsContainerView
-- (void)setHidden:(BOOL)hidden {
-    %orig(YES);
-}
-- (CGSize)intrinsicContentSize {
-    return CGSizeZero;
-}
-- (CGSize)sizeThatFits:(CGSize)size {
-    return CGSizeZero;
-}
-- (void)setFrame:(CGRect)frame {
-    %orig((CGRect){frame.origin, CGSizeZero});
-}
-- (void)didMoveToWindow {
-    %orig;
-    ((UIView *)self).hidden = YES;
-}
-%end
 
 @interface SGRPlayerArtworkWatcher : NSObject <SGPlayerStateObserver>
 @end
@@ -422,6 +363,5 @@ static SGRPlayerArtworkWatcher *sg_artworkWatcher;
     SGRequireClasses(@[
         @"_TtC35CreativeWorkCommons_CoverArtTiltKit16CoverArtTiltView",
         @"_TtC28NowPlaying_ContentLayersImpl16CoverArtCellImpl",
-        @"_TtC22Lyrics_NPVContainerKit19LyricsContainerView",
     ]);
 }
