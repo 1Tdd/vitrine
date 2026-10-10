@@ -43,6 +43,26 @@ needs `PHONE_HOST` and the token the app logs at launch, which it reads from the
 - There is no previous-track command. `scripts/phone.py seek 0`, then
   `scripts/phone.py tap --id SPTNowPlayingPreviousTrackButton` with the player open.
 - `ls` in this shell is eza, which takes other flags (`ls -t` fails). Use `/bin/ls`.
+- `seek --by -15` moves relative to where the song plays (Spotify's `relative:` 2; 1 counts from the end and
+  skips past it into the next song).
+- The glass tab bar is not the driver's: `tab` may fail in the redesign. Tap the glass bar's icon by position
+  from a screenshot, after a scroll to the top so the bar is not minimized.
+- Spotify's own lyrics switch (the preview under the cover) is the track ⋯ menu's "Lyrics • On/Off", under More
+  in the redesign's menu.
+- `state` failing with "Connection reset" while the app runs means the phone is locked or Spotify is not in
+  front; it is not a broken build.
+- Read a setting before a test changes it and put it back after: Vitrine prefs, the tab layout, shuffle (three
+  states on a playlist page), repeat, saved songs, Spotify's lyrics switch.
+
+## Simulator
+
+`scripts/sim-build.sh` runs a Spotify IPA with the tweak in the iOS Simulator, for a second Spotify version and for
+layout checks the phone is not needed for. Run it from a separate worktree: it writes the flag table for its IPA's
+version, which would break the phone's `make quick` of another version. `SG_DRIVER=1` builds the driver on port
+8086: `PHONE_PORT=8086 scripts/phone.py …`, and `xcrun simctl io <udid> screenshot` for screenshots. Prefs are read
+at launch, so `simctl terminate` and `launch` after a `pref`. In Xcode 27 the window is
+`Xcode.app/Contents/Applications/DeviceHub.app`. It cannot show the volume slider, haptics, the Live Activity or the
+Neural Engine; those stay checks for the phone.
 
 ## Screenshots
 
@@ -118,6 +138,10 @@ layout.
 - Spotify playing on another device through Connect (a laptop or speaker glyph on the bar) leaves the phone
   a remote. The lock screen's full-screen artwork and anything that needs local audio do nothing then.
 - `sing: the iPhone is hot` means Karaoke holds back on purpose.
+- Karaoke rests (0 windows, its status "As sung") when the vocals are at 1 and Spatial voice is off: nothing to
+  change. Lower `spotifyglass.sing.level` for a test.
+- A label `find` reports as shown can sit in a card collapsed to 0 pt (the redesign drops every card under the
+  player). Check the cell's height in the tree before calling it visible.
 - FLEX's toolbar can cover the top of the screen. The user closes it with its ✕.
 - A log line on a path that runs per event, per packet or per tick floods the in-app log (it pushed every
   other line out at about fifty a second) and costs battery for every user. Log the first few of a launch
