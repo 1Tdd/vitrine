@@ -278,7 +278,9 @@ UIImageView *SGRCreatorPicture(UIView *root) {
 - (void)layoutSubviews {
     [super layoutSubviews];
     CGFloat width = self.bounds.size.width, text = MAX(0, width - 2 * kSide);
-    CGFloat y = round(self.bounds.size.height - SGRHeaderInfoBottom - [self contentHeightForWidth:width]);
+    CGFloat content = [self contentHeightForWidth:width];
+    CGFloat y = round(self.bounds.size.height - SGRHeaderInfoBottom - content);
+    if (self.pinnedTop > 0 && self.pinnedTop + content <= self.bounds.size.height) y = round(self.pinnedTop);
     // No name, no picture: it belongs to the line.
     _picture.hidden = !_picture.image || _creator.hidden;
 

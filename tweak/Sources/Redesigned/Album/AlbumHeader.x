@@ -416,6 +416,14 @@ static SGRHeaderInfo *applyInfo(UIView *header, UIView *page) {
     setFrame(info, header.bounds);
 
     UIView *title = SGRFindByIdentifier(header, @"CreativeWorkPlatform.Components.UI.TitleRow", &kTitleKey);
+    // Spotify's header grows and shrinks as its Play turns to Pause (issue #25), its title row does not.
+    if (title.window) {
+        CGFloat top = [title convertRect:title.bounds toView:header].origin.y;
+        if (fabs(top - info.pinnedTop) > 0.5) {
+            info.pinnedTop = top;
+            [info setNeedsLayout];
+        }
+    }
     UIView *parent = SGRFindByIdentifier(header, @"CreativeWorkPlatform.Components.UI.ParentRow", &kParentKey);
     UIView *metadata = SGRFindByIdentifier(header, @"Components.UI.MetadataRow", &kMetaKey);
     NSString *length = metadataText(metadata);
