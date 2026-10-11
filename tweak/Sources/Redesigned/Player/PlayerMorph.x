@@ -286,6 +286,7 @@ static SGRPlayerMorph *morphFor(SPTBarOverlayPresentationTransition *transition,
 // has the player and morphs to match, so Spotify's frame, alpha and completion stay its own. It is let go once the
 // transition is no longer interactive and the player has no animation left and holds still a few frames.
 static const CFTimeInterval kGiveUp = 0.9;   // UIKit's presentation runs about 0.5 s
+static const float kCloseSpeed = 1.5;         // how much faster than Spotify's a close it runs on its own plays
 
 @interface SGRMorphFollower : NSObject
 @property (nonatomic, strong) SGRPlayerMorph *morph;
@@ -295,6 +296,7 @@ static const CFTimeInterval kGiveUp = 0.9;   // UIKit's presentation runs about 
 @property (nonatomic) NSInteger still;
 @property (nonatomic) CGFloat lastY;
 @property (nonatomic) CFTimeInterval settledSince;   // when it was last driven by a finger, or began
+@property (nonatomic) BOOL sped;                     // the container's layer runs at kCloseSpeed until let go
 @end
 
 @implementation SGRMorphFollower
@@ -323,6 +325,7 @@ static const CFTimeInterval kGiveUp = 0.9;   // UIKit's presentation runs about 
     if (logged++ < 3) SGLog(@"player morph: let go after %.2f s, %@", CACurrentMediaTime() - self.settledSince, self.still >= 3 ? @"settled" : @"given up");
     [self.link invalidate];
     self.link = nil;
+    if (self.sped) self.container.layer.speed = 1;
     [self.morph tearDown];
     self.morph = nil;
 }
@@ -354,6 +357,12 @@ static void followTransition(id transition, id<UIViewControllerContextTransition
     follower.overlay = overlay;
     follower.context = context;
     follower.lastY = CGFLOAT_MAX;
+    // A close Spotify runs on its own, not a drag, plays faster: its slide, its stand-ins and so the morph that
+    // follows them. Set before the transaction commits, so the animations just added start at the new speed.
+    if (!to.isBeingPresented && !context.isInteractive) {
+        container.layer.speed = kCloseSpeed;
+        follower.sped = YES;
+    }
     follower.link = [CADisplayLink displayLinkWithTarget:follower selector:@selector(tick:)];
     follower.link.preferredFrameRateRange = CAFrameRateRangeMake(80, 120, 120);
     [follower.link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
