@@ -103,3 +103,9 @@ BOOL SGPlayerMusicClientFormat(AudioStreamBasicDescription *format);
 // Spotify's output cannot be reached at all. Register from a %ctor; up to four.
 typedef void (*SGPlayerOutputWatcher)(AudioUnit output);
 BOOL SGPlayerWatchMusicOutput(SGPlayerOutputWatcher watcher);
+
+#if SG_DRIVER
+// Speed-rebuffer test (FLEX builds): completed runs of silence from the music's mixer so far, and the last one's
+// start (mach time) and length; silentNow while one is running.
+uint64_t SGSpeedProbeSilence(uint64_t *host, double *ms, bool *silentNow);
+#endif

@@ -189,6 +189,41 @@ static void silence(AudioBufferList *data) {
     for (UInt32 b = 0; b < data->mNumberBuffers; b++) if (data->mBuffers[b].mData) memset(data->mBuffers[b].mData, 0, data->mBuffers[b].mDataByteSize);
 }
 
+#if SG_DRIVER
+// Runs of silence from the music's mixer (speed-rebuffer test): written on the render thread only, read by
+// SGSpeedProbeSilence on main. A run is reported once it ends.
+static _Atomic uint64_t sg_runStart, sg_runFrames, sg_lastRunHost, sg_lastRunFrames, sg_runs;
+static _Atomic uint64_t sg_runRateBits;
+
+static void noteSilence(bool silent, UInt32 frames, double rate, uint64_t host) {
+    uint64_t start = atomic_load_explicit(&sg_runStart, memory_order_relaxed);
+    if (silent) {
+        if (!start) atomic_store_explicit(&sg_runStart, host, memory_order_relaxed);
+        atomic_fetch_add_explicit(&sg_runFrames, frames, memory_order_relaxed);
+    } else if (start) {
+        uint64_t bits;
+        memcpy(&bits, &rate, sizeof bits);
+        atomic_store_explicit(&sg_runRateBits, bits, memory_order_relaxed);
+        atomic_store_explicit(&sg_lastRunHost, start, memory_order_relaxed);
+        atomic_store_explicit(&sg_lastRunFrames, atomic_load_explicit(&sg_runFrames, memory_order_relaxed), memory_order_relaxed);
+        atomic_fetch_add_explicit(&sg_runs, 1, memory_order_release);
+        atomic_store_explicit(&sg_runStart, 0, memory_order_relaxed);
+        atomic_store_explicit(&sg_runFrames, 0, memory_order_relaxed);
+    }
+}
+
+uint64_t SGSpeedProbeSilence(uint64_t *host, double *ms, bool *silentNow) {
+    uint64_t runs = atomic_load_explicit(&sg_runs, memory_order_acquire);
+    uint64_t bits = atomic_load_explicit(&sg_runRateBits, memory_order_relaxed);
+    double rate;
+    memcpy(&rate, &bits, sizeof rate);
+    *host = atomic_load_explicit(&sg_lastRunHost, memory_order_relaxed);
+    *ms = rate > 0 ? atomic_load_explicit(&sg_lastRunFrames, memory_order_relaxed) * 1000.0 / rate : 0;
+    *silentNow = atomic_load_explicit(&sg_runStart, memory_order_relaxed) != 0;
+    return runs;
+}
+#endif
+
 // The output's mixer's next `frames` frames into `data`, in chunks of at most its largest slice, each with a
 // sample time of the output's own, so Spotify's units never see a time twice (an AU renders a time it has
 // seen from cache). With `sounding`, it stops at the first chunk marked silent (SGPlayerPull).
@@ -234,6 +269,13 @@ static OSStatus pullSource(Output *output, AudioUnit source, const AudioTimeStam
         if ((status != noErr || (flags & kAudioUnitRenderAction_OutputIsSilence))
             && observesSource && output == music()) SGPlayerInvalidateSource();
         #if SG_DRIVER
+        if (output == music()) {
+            // Silent as flagged, or as heard: every sample of the first channel under -80 dBFS.
+            bool quiet = status == noErr && !(flags & kAudioUnitRenderAction_OutputIsSilence) && target->mBuffers[0].mData;
+            const float *samples = target->mBuffers[0].mData;
+            for (UInt32 i = 0; quiet && i < count; i++) if (fabsf(samples[i]) > 1e-4f) quiet = false;
+            noteSilence((flags & kAudioUnitRenderAction_OutputIsSilence) || status != noErr || quiet, count, rateOf(&output->client), anchorHost);
+        }
         if (output == music()) {
             double rate = rateOf(&output->client);
             // About ten samples per second at the current speed. Sing's refill may burst.
