@@ -586,7 +586,10 @@ App:
                    Mod Settings for a free Apple ID's week) and the Mod page with the reset
     Onboarding/    the welcome page over Home on the first launch, opening on the logo in glass, with Redesigned UI and
                    a No ads switch that sets Hide ads, Hide upsells and Spoof Premium together (off leaves each as it is;
-                   on, like a changed look, ends the tour in a restart, as all are read at launch);
+                   on, like a changed look, ends the tour in a restart, as all are read at launch), and under "Easy to miss"
+                   a card of pointers, each what it is and where in Mod Settings: Split Tabs (with the redesign picked),
+                   Lyrics (sources, lyrics for every track, the redesign's live preview with it picked) and AirPods
+                   gestures with the Live Activity (iOS 17 on);
                    on the first launch of a new version instead, What's new (WhatsNew.m), this version's section of
                    CHANGELOG.md, which scripts/whats-new.sh writes into a gitignored header at each make (a section
                    that came over from upstream is left out, so a build without its own has no sheet). The Mod
