@@ -334,9 +334,11 @@ Shared:
                   ISRC with Spotify's own spclient headers, asks Apple Music's catalog for that ISRC (the phone's own country first, then the US), and names the
                   matched song's catalog id (same ISRC, length within 2 s, a haptic track) or else the ISRC in the now
                   playing info for iOS's own Music Haptics, which plays on the lock screen and in other apps too
-                  (SystemMusicHaptics.x, its pure steps in SGHapticTrack.m). Both may be on: while it asks and while
-                  iOS has a haptic track for the song, the mod's own stays quiet, since iOS plays the track in front
-                  of Spotify too; once iOS has none, the mod's own plays while Spotify is in front. The analyzer is
+                  (SystemMusicHaptics.x, its pure steps in SGHapticTrack.m). Both may be on: while iOS reports the named song
+                  playing, the mod's own stays quiet, since iOS plays the track in front of Spotify too, and also while
+                  it asks (10 s at most) and for 3 s after a song is named; with no report by then, once iOS has none,
+                  while iOS's is paused in Control Center or in an install iOS does not list, the mod's own plays while
+                  Spotify is in front. The analyzer is
                   scored on the Mac against harness/haptics/, as are the pure steps (build/track), the hook, the two
                   switches, the stand-down and the move from the old choice in the simulator against its sim/, the
                   settings against harness/haptics-page/
@@ -750,7 +752,7 @@ has its Strength under it, grayed out while the switch is off (10 to 100%, a tap
 Music Haptics its Strength (20 to 200%, 100% being how it first shipped, a kick at the new strength with each step) and
 Follows, grayed out the same way, Everything (a tap on each kick and snare and a rumble under the bass), Beat (the
 taps without the rumble) or Bass (the kicks' taps and the rumble); In the Background a Status row (Paused, Waiting,
-Checking, Ready, Playing or Unavailable) while it is on, or, while Music Haptics is off in Settings > Accessibility, a
+Checking, "Sent, iOS not playing yet", Playing or Unavailable) while it is on, or, while Music Haptics is off in Settings > Accessibility, a
 row saying so whose tap opens its ⓘ, all applying straight away. Live Activity, on iOS 17 and up under either look: its switch and which view it
 shows, Lyrics, Queue or Control menu, and for Lyrics its Without lyrics (Note or Track), Alignment (Center, or Left),
 Translations (off until switched on) and Text size (Small, Medium or Large); then for every view a Card section of

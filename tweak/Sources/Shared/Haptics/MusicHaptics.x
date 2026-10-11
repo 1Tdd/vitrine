@@ -541,7 +541,7 @@ static void updateListening(void) {
 
 void SGMusicHapticsSetSystemCovers(BOOL covers) {
     if (atomic_exchange(&sg_systemCovers, covers) == covers || !sg_wake) return;
-    if (SGMusicHapticsOn()) SGLog(@"music haptics: %@", covers ? @"iOS's own has this song, standing down" : @"iOS's own has none for this song, playing along");
+    if (SGMusicHapticsOn()) SGLog(@"music haptics: %@", covers ? @"iOS's own covers this song, standing down" : @"iOS's own does not play this song, playing along");
     updateListening();
 }
 
