@@ -10,7 +10,8 @@
 //                       gone (the Music list is the page), the flags the screen forces
 //     ArtistHeader.x    the header: the photo full bleed dissolving into the field, and the Kit's
 //                       SGRHeaderInfo over it -- the name, the listeners, shuffle, a white Play and Follow
-//     ArtistSections.x  the sections the Music list carries that are not the artist's music: its videos
+//     ArtistSections.x  the sections the Music list carries that are not the artist's music: its videos, and
+//                       the Artist pick, the Release Countdown and About when asked
 //     ArtistFollow.x    whether the artist is followed, from Spotify's collection, for Follow's glyph
 //     ArtistSettings.m  the Artists page of Mod Settings: the switches below
 //
@@ -24,6 +25,11 @@
 // and the Music / Video / Merch strip (ArtistField.x).
 #define SGRKeyArtistHideVideos @"spotifyglass.redesign.artist.hide.videos"
 #define SGRKeyArtistHideTabs @"spotifyglass.redesign.artist.hide.tabs"
+// And off until switched on, as the native look's hides are: the Artist pick, the Release Countdown and About
+// sections of the Music list (ArtistSections.x).
+#define SGRKeyArtistHidePick @"spotifyglass.redesign.artist.hide.pick"
+#define SGRKeyArtistHideCountdown @"spotifyglass.redesign.artist.hide.countdown"
+#define SGRKeyArtistHideAbout @"spotifyglass.redesign.artist.hide.about"
 UIViewController *SGRArtistSettingsPage(void);
 
 // The artist page `view` is on, or nil: the TemplateView with the identifier creator-page.

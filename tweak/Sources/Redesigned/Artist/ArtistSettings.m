@@ -12,6 +12,9 @@ UIViewController *SGRArtistSettingsPage(void) {
         SGSection(@"Hide on an artist's page", @[
             SGSwitchRow(@"Videos", @"In the Music list, and in the Video tab", SGRKeyArtistHideVideos),
             SGSwitchRow(@"Music, Video and Merch tabs", @"Without them the Music list is the page", SGRKeyArtistHideTabs),
+            SGHideRow(@"Artist pick", nil, SGRKeyArtistHidePick),
+            SGHideRow(@"Release countdown", @"The pre-save of an upcoming release", SGRKeyArtistHideCountdown),
+            SGHideRow(@"About", nil, SGRKeyArtistHideAbout),
         ]),
     ] footer:nil];
 }
