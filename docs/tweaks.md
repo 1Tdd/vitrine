@@ -584,7 +584,9 @@ App:
                    release brings up on its own a few seconds after Spotify opens, once per release; backup, the
                    signing warning, the date the provisioning profile runs out (on the Mod page, and at the top of
                    Mod Settings for a free Apple ID's week) and the Mod page with the reset
-    Onboarding/    the welcome page over Home on the first launch, opening on the logo in glass, with Redesigned UI;
+    Onboarding/    the welcome page over Home on the first launch, opening on the logo in glass, with Redesigned UI and
+                   a No ads switch that sets Hide ads, Hide upsells and Spoof Premium together (off leaves each as it is;
+                   on, like a changed look, ends the tour in a restart, as all are read at launch);
                    on the first launch of a new version instead, What's new (WhatsNew.m), this version's section of
                    CHANGELOG.md, which scripts/whats-new.sh writes into a gitignored header at each make (a section
                    that came over from upstream is left out, so a build without its own has no sheet). The Mod
