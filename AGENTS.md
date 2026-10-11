@@ -59,6 +59,13 @@ Rules:
 
 ## Working on it
 
+- Lossless (`Shared/Lossless/`, `SGLossless.h`; off unless `spotifyglass.lossless` is set): a local FLAC or ALAC of
+  the same recording plays in place of Spotify's sound. The anchor comes from cross-correlating 4 s of Spotify's
+  output with the file, never from Spotify's position reports, and every seek, skip, pause or route change drops it
+  (`SGSourceEvents.x`). Spotify still streams its own copy, so the switch lowers its quality only while the next song
+  has a file. Sources (providers, downloads) are a design only: `docs/lossless-sources.md`. Do not take Sing's
+  `SGPlayerSetStage` slot. After audio edits, run the handoff harness (`harness/lossless/handoff-build.sh`).
+
 - Build: `make install` (signs and pushes to the phone), `make quick` (a tweak-only change, in seconds), `make release` (IPA only). Tweak only:
   `env -u MAKELEVEL gmake -C tweak clean package`.
 - Look at Spotify's views through recorded trees (`make session` records clean ones into

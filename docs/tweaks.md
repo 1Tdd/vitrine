@@ -594,6 +594,28 @@ change shows after Spotify restarts; the tab editor on the Navbar page is the ex
 out again, as are the Home gradient's color, strength and height, but not the switch that turns it on, and Vibrations
 and Live Activity. The root page in `App/ModSettings.x` links the Appearance page and the page of each part of Spotify, and only the stored look's.
 
+## Lossless
+
+Off unless `spotifyglass.lossless` is set; there is no settings row yet. A FLAC or ALAC file in Spotify's
+Documents/Lossless folder (Files app › Spotify › Lossless) plays in place of Spotify's sound for the same recording.
+
+- **Which file:** the folder's index (`.index.plist`, track URI to file name), else a file whose title tag (or
+  name) is the track's title and whose length is within 2 s. Artists are not compared. A file goes in the index
+  once its sound matched (`SGLosslessStore.m`).
+- **Where in the file:** at each track start, seek and resume, 4 s of Spotify's output are matched against the
+  file near Spotify's position: first on a mono copy at 1/16 of the rate, then exactly on a full-rate window. A
+  normalized correlation under 0.8 is another recording or master, and Spotify's sound stays. The file plays
+  from that frame at the gain that matches Spotify's loudness (`SGLosslessEngine.m`).
+- **Playback:** a static 2^19-frame ring that a worker thread fills ahead of where Spotify plays. A block the
+  ring does not hold yet keeps Spotify's sound. The swap is in Shared/Player's source selector, before Sing.
+- **Data:** Spotify still downloads and decodes its own copy, and it downloads a song as it starts. So while
+  the next song in its queue has a file, Spotify's quality is set to low, and the user's value comes back
+  afterwards, also at the next launch (`LosslessQuality.x`).
+- **Not yet:** Karaoke and speeds other than 1 keep Spotify's sound; the first 4 s after each start, seek or
+  resume are Spotify's; a silent block drops the anchor until the next try. Sources that download files are a
+  design only: [Lossless sources](lossless-sources.md), [addons](lossless-addons.md),
+  [playback investigation](lossless-playback.md), [prototype history](lossless-prototype.md).
+
 ## Make targets
 
     make build      # out/vitrine-<version>.ipa with FLEX in it

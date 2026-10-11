@@ -174,3 +174,10 @@ void SGSingRemoveOldModel(void);
 NSArray<NSString *> *SGSingComputeUnitNames(void);
 // Whether this OS can load the model (iOS 18). Memory is checked as the model loads (SGSingLoader.m).
 BOOL SGSingOSSupported(void);
+
+// Spotify's position before Sing's lead correction, for discontinuity observation. Off render.
+double SGSingSourcePosition(SPTPlayerState *state);
+#if SG_DRIVER
+// Whether the most recent stage call entered Sing's engine, rather than passing straight through.
+BOOL SGSingAnchorStageActive(void);
+#endif

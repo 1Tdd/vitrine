@@ -815,6 +815,31 @@ static NSDictionary<NSString *, SGCommand> *commands(void) {
                     return by ? @{@"by" : @(by.doubleValue)} : @{@"seconds" : @(seconds)};
                 });
             },
+            // Playback speed, 1 when normal: speed 1.5.
+            @"speed" : ^NSDictionary *(NSDictionary *p) {
+                double speed = [(p[@"value"] ?: p[@"arg"]) doubleValue];
+                if (speed <= 0) fail(@"speed takes a rate, 1 when normal");
+                return onMain(^id {
+                    SGSetPlayerSpeed(speed);
+                    return @{@"speed" : @(SGPlayerSpeed())};
+                });
+            },
+            // A local lossless file in place of Spotify's sound for the same recording: lossless anchor --path P,
+            // lossless check, lossless stop. Runs off main: matching takes a few seconds.
+            @"lossless" : ^NSDictionary *(NSDictionary *p) {
+                NSString *error;
+                NSDictionary *result = SGLosslessProbe(p[@"arg"] ?: @"check", p, &error);
+                if (!result) fail(@"%@", error);
+                return result;
+            },
+            // Karaoke on or off: sing 1, sing 0.
+            @"sing" : ^NSDictionary *(NSDictionary *p) {
+                BOOL on = [(p[@"value"] ?: p[@"arg"]) boolValue];
+                return onMain(^id {
+                    SGSetSingOn(on);
+                    return @{@"sing" : @(on)};
+                });
+            },
             @"play" : ^NSDictionary *(NSDictionary *p) {
                 return onMain(^id {
                     [requirePlayer() resume:nil];
