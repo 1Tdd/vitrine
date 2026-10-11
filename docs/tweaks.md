@@ -507,8 +507,13 @@ Redesigned:
                   Contrast), from 0.10 to 0.80 and 0.15 more behind the lyrics. A track that changes while the player
                   cannot be seen (no window, or the app not in front) takes the last clip away at once. Checked in the simulator against
                   harness/player/ (`motion`). The Visualizer
-                  (PlayerVisualiser.m) draws two soft hills of the song's spectrum across the foot of the player in the
-                  cover's flow colors, over the Fluid field held still, blurred behind the lyrics: the audio effects'
+                  (PlayerVisualiser.m) draws two soft hills of the song's spectrum across the foot of the player, the kick
+                  a mound in the middle (the two bands under 80 Hz are left out, and the kick's bands stand at least as
+                  tall as the bands beside them, so the middle is never a notch), as light in the cover's flow colors
+                  added to the Fluid field held still (plusL, every color at one luminance with its saturation lifted, so
+                  a red cover glows warm and a black one is a gray mist, never a silhouette), clear toward the tallest crest so a peak
+                  thins out instead of ending in an edge, the front hill brightening on the kick, blurred behind the
+                  lyrics: the audio effects'
                   render notify on the music's output hands what it plays, mixed to mono, to one reader (SGAudioSetOutputReader), and
                   SGRSpectrum.m cuts it into 24 bands with Accelerate's FFT on the render thread, without allocating or
                   locking, and publishes them atomically; a display link of at most 60 Hz (30 behind the lyrics, 15
