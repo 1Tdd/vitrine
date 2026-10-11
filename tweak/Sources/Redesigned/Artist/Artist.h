@@ -12,15 +12,19 @@
 //                       SGRHeaderInfo over it -- the name, the listeners, shuffle, a white Play and Follow
 //     ArtistSections.x  the sections the Music list carries that are not the artist's music: its videos
 //     ArtistFollow.x    whether the artist is followed, from Spotify's collection, for Follow's glyph
+//     ArtistSettings.m  the Artists page of Mod Settings: the switches below
 //
 // Every hook installs only while Redesigned UI is on (SGRedesignedUI); the native look's do not then.
 // Threading: main thread only.
 #import <UIKit/UIKit.h>
 
-// What the redesign takes off the page, on until switched off (Redesigned/Album/AlbumSettings.m): the videos
-// in the Music list (ArtistSections.x) and the Music / Video / Merch strip (ArtistField.x).
+// Apple Music's logo in place of the artist's name (ArtistHeader.x); on until switched off.
+#define SGRKeyArtistLogo @"spotifyglass.redesign.artist.logo"
+// What the redesign takes off the page, on until switched off: the videos in the Music list (ArtistSections.x)
+// and the Music / Video / Merch strip (ArtistField.x).
 #define SGRKeyArtistHideVideos @"spotifyglass.redesign.artist.hide.videos"
 #define SGRKeyArtistHideTabs @"spotifyglass.redesign.artist.hide.tabs"
+UIViewController *SGRArtistSettingsPage(void);
 
 // The artist page `view` is on, or nil: the TemplateView with the identifier creator-page.
 UIView *SGRArtistPageOf(UIView *view);

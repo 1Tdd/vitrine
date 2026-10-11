@@ -556,10 +556,10 @@ Redesigned:
                   there and the row carries the Kit's stand-ins, which draw their glyph and fire them. A track's artist line
                   goes where it only repeats the album's artist (with the guests the title names after "feat." and the
                   like), its explicit badge drawn after the title instead (AlbumCredits.m decides, checked on the Mac
-                  by harness/album-credits/; a switch on the Albums & artists page). Under the tracks
+                  by harness/album-credits/; a switch on the Albums page). Under the tracks
                   everything the server sends is dropped -- more by the artist, videos, concerts, merch, you might also
                   like, and whatever it adds next -- but the album's own line and its copyright, each section back
-                  once its switch on the Albums & artists page is off (told apart by its English heading; in another
+                  once its switch on the Albums page is off (told apart by its English heading; in another
                   language Everything else covers them all; Album.h lists its files). A podcast's episode page is the same template, so it is given the same field, and what it
                   paints over it is taken off. Laid out on the Mac against harness/album/
 
@@ -698,8 +698,8 @@ the files are gone. Swiping the row deletes the family. An import from before fa
 spotifyglass.font.file) moves to spotifyglass.font.files and the family name on first use. Then the App icon. Everything on the page applies after a restart. Redesigned UI, the main page's
 first row, is the one switch between the two looks (see Layers): it glows (Settings/SGGlowSwitch), its ⓘ says what
 it changes, and flipping it offers to restart Spotify. The pages show only what the stored look has: a page opened
-after flipping the switch already shows what the restart will bring, and the main page swaps Home & Library and
-Albums & artists as it is flipped. Tab bar: the tab editor of the stored look, each with
+after flipping the switch already shows what the restart will bring, and the main page swaps Home & Library for
+Albums and Artists as it is flipped. Tab bar: the tab editor of the stored look, each with
 its own list of tabs. Lyrics, on the main page of its own: in the redesign a live preview of the lyrics first, with the presets of their look
 under it and their sliders in a sheet (Text size, Line spacing, Blur, Glow, Wave), applying at once; then Karaoke, then the ordered list of lyrics sources,
 lyrics for every track, naming the source in the redesign, the lock screen, and glass lyrics in the native look; in
