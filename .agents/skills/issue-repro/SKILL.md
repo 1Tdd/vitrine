@@ -44,13 +44,18 @@ pass the header only to it. A link to any other host is downloaded without the t
 
     d=/tmp/claude-501/issue<n>; mkdir -p $d
     url="<attachment URL from the body or a comment>"
-    case "$url" in
-      https://github.com/*/assets/*|https://*.githubusercontent.com/*)
-        curl -sSL -H "Authorization: token $GH_TOKEN" -o $d/v.mov "$url" ;;
-      https://*)
-        curl -sSL -o $d/v.mov "$url" ;;   # some other host: never hand it the token
-      *) echo "not an http(s) url, skipping" ;;
-    esac
+    # Isolate the host before matching it: a glob on the whole URL lets * swallow a path, so
+    # https://evil.com/.githubusercontent.com/x would pass a whole-URL pattern. Match the host alone.
+    rest=${url#https://}
+    if [ "$rest" = "$url" ]; then echo "not https, skipping"; else
+      host=${rest%%/*}; host=${host##*@}   # drop any user@ before the host
+      case "$host" in
+        github.com|*.githubusercontent.com)      # GitHub's own DNS; nobody else gets these names
+          curl -sSL -H "Authorization: token $GH_TOKEN" -o $d/v.mov "$url" ;;
+        *)
+          curl -sSL -o $d/v.mov "$url" ;;        # some other host: never hand it the token
+      esac
+    fi
     file $d/v.mov; ffprobe -v error -show_entries format=duration \
       -show_entries stream=width,height,r_frame_rate -of compact $d/v.mov
 
