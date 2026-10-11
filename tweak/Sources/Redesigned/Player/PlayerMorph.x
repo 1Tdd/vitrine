@@ -68,6 +68,7 @@ static CGFloat screenRadius(void) {
 }
 
 @interface SGRPlayerMorph : NSObject
+@property (nonatomic, readonly) CGFloat restY;
 @end
 
 @implementation SGRPlayerMorph {
@@ -80,6 +81,12 @@ static CGFloat screenRadius(void) {
     CGColorRef _overlayColor;
     BOOL _coverHidden;
     BOOL _follows;   // 9.1.90: Spotify animates the player's frame and alpha, which the morph then only reads
+}
+
+// Where the player's top edge rests when it has become the bar: 9.1.90's CompactOverlayTransition slides it down only
+// that far (y 727 of 874), not off the screen.
+- (CGFloat)restY {
+    return CGRectGetMinY(_card);
 }
 
 // 9.1.90's CompactOverlayTransition animates the player itself, so the morph follows where it is drawn.
@@ -298,8 +305,8 @@ static const CFTimeInterval kGiveUp = 0.9;   // UIKit's presentation runs about 
         return;
     }
     CALayer *drawn = overlay.layer.presentationLayer ?: overlay.layer;
-    CGFloat y = drawn.frame.origin.y, height = container.bounds.size.height;
-    [self.morph apply:height > 0 ? 1 - y / height : 1];
+    CGFloat y = drawn.frame.origin.y, rest = self.morph.restY > 0 ? self.morph.restY : container.bounds.size.height;
+    [self.morph apply:rest > 0 ? MIN(1, MAX(0, 1 - y / rest)) : 1];
     BOOL interactive = self.context.isInteractive;
     BOOL moving = overlay.layer.animationKeys.count > 0 || fabs(y - self.lastY) > 0.5 || interactive;
     self.lastY = y;
