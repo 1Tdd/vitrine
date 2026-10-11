@@ -347,7 +347,8 @@ Shared:
                   says: Nothing, back or forward 15 s, play or pause (which listens with the song paused too), next or
                   previous track, shuffle, repeat, or Like, which adds the track to Liked Songs through Spotify's
                   collection platform (addURL:showUIConfirmation:completion:); Like and Next track until changed. A
-                  tone played through Spotify's playback session confirms each, whatever the Ring/Silent switch says.
+                  tone played through Spotify's playback session confirms each, whatever the Ring/Silent switch says,
+                  unless Chime on activation is off (spotifyglass.headgestures.chime; Try it and teaching always sound).
                   Try it listens a few seconds and names in its row what it picked up, doing nothing to the song. A
                   sheet teaches one's own nod and shake, five of each after a tone, a ring showing the head live (a dot
                   that moves with it, ticks lighting toward where it went; SGHeadMotionListen) and five dots counting
