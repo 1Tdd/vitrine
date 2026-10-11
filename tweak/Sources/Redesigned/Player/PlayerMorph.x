@@ -297,7 +297,16 @@ static const float kCloseSpeed = 1.5;         // how much faster than Spotify's 
 @property (nonatomic) CGFloat lastY;
 @property (nonatomic) CFTimeInterval settledSince;   // when it was last driven by a finger, or began
 @property (nonatomic) BOOL sped;                     // the container's layer runs at kCloseSpeed until let go
+@property (nonatomic) BOOL closing, wasInteractive;
 @end
+
+// The container's clock runs at kCloseSpeed from now on, continuing from where its animations are.
+static void runFaster(CALayer *layer) {
+    CFTimeInterval now = CACurrentMediaTime(), local = [layer convertTime:now fromLayer:nil];
+    layer.speed = kCloseSpeed;
+    layer.beginTime = layer.superlayer ? [layer.superlayer convertTime:now fromLayer:nil] : now;
+    layer.timeOffset = local;
+}
 
 @implementation SGRMorphFollower
 - (void)tick:(CADisplayLink *)link {
@@ -310,6 +319,12 @@ static const float kCloseSpeed = 1.5;         // how much faster than Spotify's 
     CGFloat y = drawn.frame.origin.y, rest = self.morph.restY > 0 ? self.morph.restY : container.bounds.size.height;
     [self.morph apply:rest > 0 ? MIN(1, MAX(0, 1 - y / rest)) : 1];
     BOOL interactive = self.context.isInteractive;
+    // A close dragged by a finger runs faster from the moment it is let go.
+    if (self.closing && self.wasInteractive && !interactive && !self.sped) {
+        runFaster(container.layer);
+        self.sped = YES;
+    }
+    self.wasInteractive = interactive;
     BOOL moving = overlay.layer.animationKeys.count > 0 || fabs(y - self.lastY) > 0.5 || interactive;
     self.lastY = y;
     self.still = moving ? 0 : self.still + 1;
@@ -325,7 +340,12 @@ static const float kCloseSpeed = 1.5;         // how much faster than Spotify's 
     if (logged++ < 3) SGLog(@"player morph: let go after %.2f s, %@", CACurrentMediaTime() - self.settledSince, self.still >= 3 ? @"settled" : @"given up");
     [self.link invalidate];
     self.link = nil;
-    if (self.sped) self.container.layer.speed = 1;
+    if (self.sped) {
+        CALayer *layer = self.container.layer;
+        layer.speed = 1;
+        layer.beginTime = 0;
+        layer.timeOffset = 0;
+    }
     [self.morph tearDown];
     self.morph = nil;
 }
@@ -357,10 +377,12 @@ static void followTransition(id transition, id<UIViewControllerContextTransition
     follower.overlay = overlay;
     follower.context = context;
     follower.lastY = CGFLOAT_MAX;
-    // A close Spotify runs on its own, not a drag, plays faster: its slide, its stand-ins and so the morph that
-    // follows them. Set before the transaction commits, so the animations just added start at the new speed.
-    if (!to.isBeingPresented && !context.isInteractive) {
-        container.layer.speed = kCloseSpeed;
+    // A close plays faster: its slide, its stand-ins and so the morph that follows them. One Spotify runs on its own
+    // from the start, one dragged by a finger from when it is let go (tick:).
+    follower.closing = !to.isBeingPresented;
+    follower.wasInteractive = context.isInteractive;
+    if (follower.closing && !context.isInteractive) {
+        runFaster(container.layer);
         follower.sped = YES;
     }
     follower.link = [CADisplayLink displayLinkWithTarget:follower selector:@selector(tick:)];
