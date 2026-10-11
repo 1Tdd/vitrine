@@ -593,7 +593,10 @@ void SGMusicHapticsWatchTaps(void (^watcher)(float intensity)) {
         atomic_store(&sg_active, false);
         updateListening();
     }];
-    [center addObserverForName:AVAudioSessionRouteChangeNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) {
-        if (atomic_load(&sg_listening)) readLatency();
+    // Posted on the audio session's thread: a main-queue observer would make it wait for main (AGENTS.md).
+    [center addObserverForName:AVAudioSessionRouteChangeNotification object:nil queue:nil usingBlock:^(NSNotification *note) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (atomic_load(&sg_listening)) readLatency();
+        });
     }];
 }
