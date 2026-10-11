@@ -6,6 +6,10 @@
 // hw.machine: the simulator answers "arm64", the host's, where a phone answers "iPhone18,1". This answers
 // the simulated device's model identifier instead, the way a phone would.
 //
+// FairPlay: the simulator throws on making an AVContentKeySession ("FairPlay Streaming is not supported on
+// simulators"), and Spotify 9.1.90 makes one as the player opens and on an artist's video, so Spotify quit
+// there. Here the session is nil instead, as a phone that refuses one.
+//
 // FLEXManager (SG_DRIVER=1 only): the tweak starts its tree server and phone driver only where FLEX is
 // loaded, and asks for the class by name, nothing more. An empty class turns them on without FLEX.
 #import <Foundation/Foundation.h>
@@ -54,6 +58,22 @@ static int SimUname(struct utsname *u) {
     int r = uname(u);
     if (r == 0) strlcpy(u->machine, Model(), sizeof u->machine);
     return r;
+}
+
+static IMP sg_keySessionInit;
+
+static id KeySessionInit(id self, SEL _cmd, id keySystem, id directory, BOOL legacy) {
+    @try {
+        return ((id (*)(id, SEL, id, id, BOOL))sg_keySessionInit)(self, _cmd, keySystem, directory, legacy);
+    } @catch (NSException *e) {
+        return nil;
+    }
+}
+
+__attribute__((constructor)) static void NoFairPlay(void) {
+    Class session = objc_getClass("AVContentKeySession");
+    Method init = session ? class_getInstanceMethod(session, sel_registerName("initWithKeySystem:storageDirectoryAtURL:legacyWebKitCompatibilityMode:")) : NULL;
+    if (init) sg_keySessionInit = method_setImplementation(init, (IMP)KeySessionInit);
 }
 
 #if SG_DRIVER
