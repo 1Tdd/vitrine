@@ -163,7 +163,13 @@ Shared:
                   looked up again when its Canvas comes in a later state, and the next track's clip is fetched ahead
                   (SGMotionFollower.m). The lock screen takes a clip under a key the system lists, cut to that key's
                   shape when it is not, with its still filled to the size asked (SGMotionClip.m), and a change of the
-                  choice applies at once, but to or from Lyrics. The cut and the service's wire format are checked on
+                  choice applies at once, Lyrics too. Switch with the star (spotifyglass.lockscreen.star, off;
+                  LockScreenStar.x) puts a star on the lock screen widget, MediaPlayer's like command, whose tap swaps
+                  the choice between the lyrics and the moving artwork it left (Moving artwork or Every song, kept under
+                  spotifyglass.lockscreen.star.back), filled while the lyrics show; the choice is the setting, so the
+                  mode outlives a relaunch and the page's row follows it. The star takes the slot of Spotify's like
+                  and dislike buttons, so their flag is forced off at launch while the switch is on, over the row's
+                  own override, and the row shows it locked. The cut and the service's wire format are checked on
                   the Mac against harness/motion/
     LocalFiles/   local files (LocalFiles.h lists its files): Edit info in the player's ⋯ menu, the table's footer
                   under Speed and pitch, which closes the menu and opens a form sheet (the three names, the cover
@@ -731,9 +737,10 @@ saying which, then the switch; its row is on the main page too, under Karaoke's)
 Checking among its states) and its removal, Toggle from lyrics (the redesign's mic, on until switched off, issue #12),
 Ignore heat warnings, and under Advanced Runs on (Automatic: the Neural Engine
 beside the CPU; CPU only) and Prepare after updates, all applying straight away. Lock screen, on the main
-page under either look, opens the lock screen widget's page, titled Lock screen (Moving artwork, Lyrics or Every song, and the lyrics' style,
-Still or Animated, and Spotify's like and dislike buttons' flag; its podcast, audiobook and artwork flags stay in
-All flags). Player: Gestures and Blocked artists (with the count on the row), which work with either look;
+page under either look, opens the lock screen widget's page, titled Lock screen: Widget (the line in place of the artist,
+and Spotify's like and dislike buttons' flag, locked off while the star is on) then Artwork (Off, Moving artwork, Lyrics
+or Every song, the lyrics' style, Still or Animated, Switch with the star, the sources and Low Data Mode; below iOS 26
+one row saying why not). Spotify's podcast, audiobook and artwork flags stay in All flags. Player: Gestures and Blocked artists (with the count on the row), which work with either look;
 in the native look also Now playing bar (its device button and its flags), Queue & devices, and
 Spotify's own player screen (artwork background, glass header buttons, Disable Canvas and the sheet,
 header, slider and sticky header flags, the cards under the player and the lyrics preview and player
