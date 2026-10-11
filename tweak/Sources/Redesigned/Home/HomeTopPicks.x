@@ -16,7 +16,7 @@
 #import "Home.h"
 
 static const CGFloat kScale = 1.7, kSmallest = 120, kHeading = 40;
-static char kLargeKey, kNaturalKey, kWrappedKey, kWidthKey;
+static char kLargeKey, kNaturalKey, kWrappedKey, kWidthKey, kAskedKey;
 static _Thread_local BOOL sg_enlarging;
 // The narrowest size kSmallest or more wide the running provider made, at Spotify's width: its cards.
 static _Thread_local CGFloat sg_cardWidth;
@@ -122,9 +122,29 @@ static CGFloat growth(CGFloat width) {
         objc_setAssociatedObject(layout, &kNaturalKey, natural, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     NSNumber *card = objc_getAssociatedObject(layout, &kWidthKey);
-    if (natural && large && card) result.size = CGSizeMake(result.size.width, natural.doubleValue + growth(card.doubleValue));
+    // Never shorter than what the shelf lays out: Spotify's height can be taken before its tallest card sized
+    // itself (a title on 4 lines), and the shelf then scrolls inside its cell. The shelf's height comes from its
+    // cards, not from the cell, so taking it does not feed back.
+    if (natural && large && card) result.size = CGSizeMake(result.size.width, MAX(natural.doubleValue + growth(card.doubleValue),
+                                                                              ceil(layout.collectionViewContentSize.height)));
     else if (natural && was) result.size = CGSizeMake(result.size.width, natural.doubleValue);
     return result;
+}
+%end
+
+// The large shelf's cards sized themselves after its cell was measured and no longer fit: measure the cell again.
+%hook _TtC16Home_CarouselKit29TouchCancellingCollectionView
+- (void)setContentSize:(CGSize)size {
+    %orig;
+    UICollectionView *shelf = (UICollectionView *)self;
+    UICollectionViewLayout *layout = shelf.collectionViewLayout;
+    if (!objc_getAssociatedObject(layout, &kLargeKey) || size.height <= shelf.bounds.size.height + 0.5) return;
+    NSNumber *asked = objc_getAssociatedObject(layout, &kAskedKey);
+    if (asked && asked.doubleValue == size.height) return;
+    objc_setAssociatedObject(layout, &kAskedKey, @(size.height), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    UIView *cell = shelf.superview;
+    while (cell && ![cell isKindOfClass:UICollectionViewCell.class]) cell = cell.superview;
+    dispatch_async(dispatch_get_main_queue(), ^{ [cell invalidateIntrinsicContentSize]; });
 }
 %end
 
