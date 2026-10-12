@@ -324,14 +324,15 @@ static void followScroll(UIScrollView *scroll) {
 }
 @end
 
-// The feed: the page's tallest scroll view, found once. Followed by an observer that lives as long as it does.
+// The feed: the page's outermost scroll view taller than the pills, found once. Not the tallest: a shelf can grow taller
+// than the page, and a shelf's offset never moves the title. Followed by an observer that lives as long as it does.
 static char kFollowerKey;
 static __weak UIScrollView *sg_feed;
 static void follow(UIView *view) {
     __block UIScrollView *feed = sg_feed;
     if (![feed isDescendantOfView:view]) feed = nil;
     if (!feed) SGForEachView(view, ^(UIView *v) {
-        if ([v isKindOfClass:UIScrollView.class] && v.bounds.size.height > (feed ? feed.bounds.size.height : 300)) feed = (UIScrollView *)v;
+        if (!feed && [v isKindOfClass:UIScrollView.class] && v.bounds.size.height > 300) feed = (UIScrollView *)v;
     });
     if (!feed) return;
     sg_feed = feed;
