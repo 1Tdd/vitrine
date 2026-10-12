@@ -419,6 +419,7 @@ static char kPartsKey, kCoverKey, kShownKey;
 
 @interface SGRLargeCardParts : NSObject
 @property (nonatomic, strong) UIView *surface;
+@property (nonatomic, strong) UIImageView *cover;   // the Kit's, edge to edge at the card's top
 @property (nonatomic, strong) UILabel *lead, *second;
 @property (nonatomic, copy) NSArray<UILabel *> *theirs;   // Spotify's labels made transparent, to bring back
 @end
@@ -451,14 +452,10 @@ static NSArray<UILabel *> *spotifyLabels(UIView *card, SGRLargeCardParts *parts)
 
 static void restore(UIView *card, SGRLargeCardParts *parts) {
     UIView *holder = SGRFindByIdentifier(card, @"Encore.ImageView", &kCoverKey);
-    if (holder && !CGAffineTransformIsIdentity(holder.transform)) holder.transform = CGAffineTransformIdentity;
-    // The corners go back to all four; roundCover (HomeCards.x) sets the small card's radius on its next pass.
-    CACornerMask all = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
-    for (UIView *sub in holder.subviews) {
-        if ([sub isKindOfClass:UIImageView.class] && sub.layer.maskedCorners != all) sub.layer.maskedCorners = all;
-    }
+    if (holder.alpha == 0) holder.alpha = 1;
     card.layer.cornerRadius = 0;
     card.layer.masksToBounds = NO;
+    [parts.cover removeFromSuperview];
     [parts.surface removeFromSuperview];
     [parts.lead removeFromSuperview];
     [parts.second removeFromSuperview];
@@ -536,12 +533,27 @@ static BOOL styleLargeCard(UIView *card) {
         parts.surface.backgroundColor = SGRElevated(UIColor.blackColor);
         parts.lead = footerLabel(SGRFont(UIFontTextStyleBody, UIFontWeightSemibold, UIContentSizeCategoryLarge), SGRPrimary());
         parts.second = footerLabel(SGRFont(UIFontTextStyleFootnote, UIFontWeightRegular, UIContentSizeCategoryLarge), SGRSecondary());
+        // The cover drawn by the Kit, edge to edge at the card's top: Spotify keeps its own 2pt in on every side (9.1.90),
+        // and a transform scaling its holder out to the edges was reset by the stack's later pass. Spotify's image view
+        // goes transparent and keeps everything else (the button's touches, its accessibility label, the image the tint
+        // and this view read).
+        parts.cover = [UIImageView new];
+        parts.cover.contentMode = UIViewContentModeScaleAspectFill;
+        // Spotify's card covers come with rounded corners in the bitmap (about 3pt of 237, transparent); the outer
+        // 1.5% of each side is left out so the cover's bottom meets the footer square.
+        parts.cover.layer.contentsRect = CGRectInset(CGRectMake(0, 0, 1, 1), 0.015, 0.015);
+        parts.cover.clipsToBounds = YES;
+        parts.cover.userInteractionEnabled = NO;
+        parts.cover.accessibilityElementsHidden = YES;
         objc_setAssociatedObject(card, &kPartsKey, parts, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         __weak UIView *weakCard = card;
         // The block is replaced on every pass, so a cover taken into another card tells the card it is in now.
         SGRObserveImage(cover, ^(UIImageView *view) {
             UIView *strongCard = weakCard;
-            if (strongCard && [view isDescendantOfView:strongCard]) tintCard(strongCard, view);
+            if (!strongCard || ![view isDescendantOfView:strongCard]) return;
+            SGRLargeCardParts *now = objc_getAssociatedObject(strongCard, &kPartsKey);
+            if (now.cover.image != view.image) now.cover.image = view.image;
+            tintCard(strongCard, view);
         });
         static dispatch_once_t once;
         dispatch_once(&once, ^{ SGLog(@"redesign home: top picks card %@ styled", NSStringFromCGRect(card.bounds)); });
@@ -550,30 +562,18 @@ static BOOL styleLargeCard(UIView *card) {
     if (layer.cornerRadius != SGRRadiusCard) layer.cornerRadius = SGRRadiusCard;
     if (layer.cornerCurve != kCACornerCurveContinuous) layer.cornerCurve = kCACornerCurveContinuous;
     if (!layer.masksToBounds) layer.masksToBounds = YES;
-    CALayer *coverLayer = cover.layer;
-    if (coverLayer.cornerRadius != SGRRadiusCard) coverLayer.cornerRadius = SGRRadiusCard;
-    if (coverLayer.cornerCurve != kCACornerCurveContinuous) coverLayer.cornerCurve = kCACornerCurveContinuous;
-    CACornerMask top = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
-    if (coverLayer.maskedCorners != top) coverLayer.maskedCorners = top;
-    if (!coverLayer.masksToBounds) coverLayer.masksToBounds = YES;
-    // Spotify keeps the cover 2pt in from the card on every side (9.1.90; none on 9.1.78); the reference's reaches
-    // the card's top and sides, so the holder is scaled up about its middle by what the inset takes, a transform its
-    // layout never reads. Only once Spotify has laid the holder out to the card (HomeCards.x asks for this pass
-    // again when it does): scaled from its first, small size, the cover filled the whole card.
-    CGAffineTransform was = holder.transform;
-    holder.transform = CGAffineTransformIdentity;
-    CGRect laid = [holder.superview convertRect:holder.frame toView:card];
-    CGFloat inset = CGRectGetMinX(laid), cardWidth = card.bounds.size.width;
-    CGAffineTransform flush = was;
-    if (inset > 0 && inset <= 4 && fabs(CGRectGetWidth(laid) + inset * 2 - cardWidth) < 1) {
-        flush = CGAffineTransformMakeScale(cardWidth / CGRectGetWidth(laid), cardWidth / CGRectGetWidth(laid));
-    } else if (CGRectGetWidth(laid) + 1 < cardWidth - 4) {
-        flush = CGAffineTransformIdentity;
-    }
-    holder.transform = flush;
+    // The card's own corners round the cover's top; its bottom meets the footer square. Spotify's holder goes
+    // transparent as a whole: its image view's alpha is Spotify's to fade in as the image loads.
+    if (parts.cover.layer.cornerRadius != 0) parts.cover.layer.cornerRadius = 0;
+    if (holder.alpha != 0) holder.alpha = 0;
+    if (parts.cover.image != cover.image) parts.cover.image = cover.image;
 
     if (parts.surface.superview != card) [card insertSubview:parts.surface atIndex:0];
     if (!CGRectEqualToRect(parts.surface.frame, card.bounds)) parts.surface.frame = card.bounds;
+    // Above the surface and under Spotify's views, which draw nothing over it but keep their place for touches.
+    if (parts.cover.superview != card) [card insertSubview:parts.cover aboveSubview:parts.surface];
+    CGRect square = CGRectMake(0, 0, card.bounds.size.width, card.bounds.size.width);
+    if (!CGRectEqualToRect(parts.cover.frame, square)) parts.cover.frame = square;
 
     NSArray<UILabel *> *theirs = spotifyLabels(card, parts);
     for (UILabel *label in theirs) {

@@ -25,7 +25,7 @@
 // Tries at finding the tab's name before settling for the English one: a miss walks the window.
 static const NSUInteger kTitleTries = 8;
 
-static char kTitleKey, kTabKey, kPillGlassKey, kGlassKey, kButtonsKey, kConnectKey, kTintKey;
+static char kTitleKey, kTabKey, kPillGlassKey, kGlassKey, kButtonsKey, kConnectKey, kTintKey, kWatchKey;
 // The title row's pill: a glass capsule around the filter button and the avatar, 44pt tall, as the reference has
 // it; the menu drives Spotify's own filter chips, hidden in the stack, and offers the device picker when Spotify
 // has one (a now playing bar) and the large shelf's Show all, its heading being gone (HomeTopPicks.x).
@@ -218,13 +218,26 @@ static UIView *glassIn(UIView *header) {
 }
 
 // Lays the pill out around the avatar, which stays Spotify's in its stack; the pill's leading edge.
+// The stack's place in the header with no transform on it (its center and bounds, which a transform leaves
+// alone): Spotify animates the stack in with a transform, and the one pass this ran in on a 440pt phone saw the
+// stack's frame half a width to the left, with no pass after to put the pill right.
+static CGRect stackPlace(UIStackView *stack) {
+    CGSize size = stack.bounds.size;
+    return CGRectMake(stack.center.x - size.width / 2, stack.center.y - size.height / 2, size.width, size.height);
+}
+
+static CGRect facePlace(UIStackView *stack, UIView *face) {
+    CGRect place = stackPlace(stack);
+    return CGRectOffset(face.frame, place.origin.x - stack.bounds.origin.x, place.origin.y - stack.bounds.origin.y);
+}
+
 static CGFloat layoutPill(UIView *header, UIStackView *stack, UIView *face) {
     SGRHomePillButtons *buttons = buttonsIn(header);
     UIView *glass = glassIn(header);
-    CGRect faceFrame = face ? [stack convertRect:face.frame toView:header] : CGRectZero;
+    CGRect faceFrame = face ? facePlace(stack, face) : CGRectZero;
     CGFloat width = kPillPad + kPillButton + (face ? faceFrame.size.width + kPillPad * 2 : kPillPad);
     CGFloat maxX = face ? CGRectGetMaxX(faceFrame) + kPillPad : header.bounds.size.width - SGRSideMargin;
-    CGFloat midY = face ? CGRectGetMidY(faceFrame) : CGRectGetMidY(stack.frame);
+    CGFloat midY = face ? CGRectGetMidY(faceFrame) : CGRectGetMidY(stackPlace(stack));
     CGRect pill = CGRectMake(round(maxX - width), round(midY - kPillHeight / 2), width, kPillHeight);
     if (!CGRectEqualToRect(glass.frame, pill)) glass.frame = pill;
     if (!CGRectEqualToRect(buttons.frame, pill)) buttons.frame = pill;
@@ -341,12 +354,33 @@ static void follow(UIView *view) {
     followScroll(feed);
 }
 
+static void layoutHeader(UIViewController *page);
+
+// The page's own pass can run before Spotify has sized its header at all (the header's view 0 by 0, its stack still
+// a width to the left and centered on the origin: seen on a 440pt phone, with no pass of the page after, which
+// left the pill beside the title). While the header has no size, this comes back a little later, for a few seconds
+// at most, until it has one.
+static const NSUInteger kHeaderWaits = 30;
+static const NSTimeInterval kHeaderWait = 0.1;
+static void layoutHeaderOnceSized(UIViewController *page, UIView *header) {
+    if (!CGRectIsEmpty(header.bounds)) return;
+    NSUInteger waits = [objc_getAssociatedObject(header, &kWatchKey) unsignedIntegerValue];
+    if (waits >= kHeaderWaits) return;
+    objc_setAssociatedObject(header, &kWatchKey, @(waits + 1), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    __weak UIViewController *weakPage = page;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kHeaderWait * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        UIViewController *strongPage = weakPage;
+        if (strongPage) layoutHeader(strongPage);
+    });
+}
+
 static void layoutHeader(UIViewController *page) {
     UIView *view = page.viewIfLoaded;
     if (!view || !findHeader(view)) return;
     UIView *header = sg_header;
     UIStackView *stack = sg_stack;
     vanish(sg_scrim);
+    layoutHeaderOnceSized(page, header);
 
     UIView *face = nil;
     for (UIView *part in stack.arrangedSubviews) {
@@ -365,7 +399,7 @@ static void layoutHeader(UIViewController *page) {
     }
     [stack layoutIfNeeded];
     // With the Home look off, the avatar stands alone in the stack and the title ends before it, as before.
-    CGFloat pillLeading = face ? CGRectGetMinX([stack convertRect:face.frame toView:header]) : header.bounds.size.width - SGRSideMargin + SGRGrid;
+    CGFloat pillLeading = face ? CGRectGetMinX(facePlace(stack, face)) : header.bounds.size.width - SGRSideMargin + SGRGrid;
     if (SGRHomeLook()) {
         pillLeading = layoutPill(header, stack, face);
         layoutTint(view);
@@ -382,7 +416,7 @@ static void layoutHeader(UIViewController *page) {
 
     CGFloat trailing = pillLeading - SGRGrid;
     CGFloat height = ceil(font.lineHeight);
-    CGRect frame = CGRectMake(SGRSideMargin, round(CGRectGetMidY(stack.frame) - height / 2), MAX(0, trailing - SGRSideMargin), height);
+    CGRect frame = CGRectMake(SGRSideMargin, round(CGRectGetMidY(stackPlace(stack)) - height / 2), MAX(0, trailing - SGRSideMargin), height);
     // By bounds and center: the title carries the scroll's transform.
     CGRect bounds = (CGRect){CGPointZero, frame.size};
     CGPoint center = CGPointMake(CGRectGetMidX(frame), CGRectGetMidY(frame));

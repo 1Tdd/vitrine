@@ -130,6 +130,15 @@ static void relayoutButtonAround(UIView *label) {
 }
 %end
 
+// A new card's labels get their text before the card is in the window, under no button yet: once Spotify's label
+// joins the window under a card or tile, that button is marked, so the pass that styles it sees the labels.
+%hook SPTEncoreLabel
+- (void)didMoveToWindow {
+    %orig;
+    if (((UIView *)self).window) relayoutButtonAround((UIView *)self);
+}
+%end
+
 %hook UILabel
 - (void)setText:(NSString *)text {
     %orig;
@@ -152,5 +161,5 @@ static void relayoutButtonAround(UIView *label) {
     ]);
     if (!SGRHomeLook()) return;
     %init(SGRHomeLook);
-    SGRequireClasses(@[@"_TtC11Home_ECMKit36ShortcutCardHomePlayingIndicatorView"]);
+    SGRequireClasses(@[@"_TtC11Home_ECMKit36ShortcutCardHomePlayingIndicatorView", @"SPTEncoreLabel"]);
 }
