@@ -576,7 +576,7 @@ Redesigned:
                   continuous corners on the covers, and, under the Home look switch (the Home page's first row; off, none of
                   its hooks install and Home is as before it): at the trailing edge a glass pill of the filter (a menu that
                   drives Spotify's own chips, with the device picker and the top shelf's Show all) and the avatar, Top picks
-                  (the first shelf, or the one Cards from names, moved above the shortcuts and drawn as large cards in their
+                  (the first shelf, or the one Cards from names, found in Spotify's feed model before its cells are built, moved above the shortcuts and drawn as large cards in their
                   covers' colors with no heading, the page tinted by the first card) and each shortcut tile as a glass pill
                   in its cover's color with its name in bold on up to two lines; in FLEX builds a meter of each scroll's
                   frames and the hooks' time (Home.h lists its files)
