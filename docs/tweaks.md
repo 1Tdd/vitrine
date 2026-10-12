@@ -262,9 +262,16 @@ Shared:
                   Tested on the Mac against harness/audio-effects/ and harness/autoeq/, the hook in the simulator
                   against its sim/, the page against harness/audio-effects-page/
     Sing/         Karaoke (Sing in the code and its keys), a song's vocals turned down while it plays (Sing.h lists
-                  its files): one voice model (Mel-Band RoFormer, MIT, exported by Vitrine for the Neural Engine and
-                  palettized to 6 bits: separator-ane.mlmodelc, 210 MB, from Hugging Face; on a FLEX build a copy in
-                  Sing/dev/ comes first) downloaded and checked file by file over Wi-Fi unless cellular is allowed,
+                  its files): the voice model Voice model chooses (spotifyglass.sing.model, read live: Best quality,
+                  the default, is Mel-Band RoFormer, MIT, exported by Vitrine for the Neural Engine and palettized to
+                  6 bits: separator-ane.mlmodelc, 210 MB; Light is the vocals of HiDolen's Mini-BS-RoFormer-18M, MIT,
+                  exported in float16 by harness/sing/export_light.py with the same input and output:
+                  separator-light.mlmodelc, 31 MB, more of the voice left in and the music dipping under it; both
+                  from the same Hugging Face repo, each with its own pins, staging folder, resume data and paused
+                  bytes; on a FLEX build a copy of the chosen one in Sing/dev/<its folder> comes first; a switch
+                  stops a running download, keeping what came in, and Sing.x loads the chosen model at once, no
+                  restart, or lets the old one go if the chosen one is not downloaded) downloaded and checked file by
+                  file over Wi-Fi unless cellular is allowed,
                   a stop keeping what came in for the next download to carry on from; the 489 MB model downloaded
                   before is kept and loaded on the CPU alone until this one is in (the Voice model row then reads
                   Update available), and deleted as its download ends or at a launch that finds both
@@ -745,8 +752,10 @@ and the rest traced live from the engine's loudness, Karaoke running on the play
 from gone through as sung to the vocals alone, with Sing along, Original and Vocals only under it), Spatial voice
 (where the iPhone reads headphone motion; a page of its own, reading out On or Off, with a live preview at its top that
 follows the head through AirPods, or sways gently without them and holds still under Reduce Motion, a line under it
-saying which, then the switch; its row is on the main page too, under Karaoke's), the voice model's download (Paused and
-Checking among its states) and its removal, Toggle from lyrics (the redesign's mic, on until switched off, issue #12),
+saying which, then the switch; its row is on the main page too, under Karaoke's), a Voice model section (Best quality
+and Light, a checkmark against the chosen one, each with its size; then the chosen model's download, Paused and Checking
+among its states, and its removal; and Remove the other model, with its size, while the one not chosen, or the old
+model with the full one, is on the iPhone), Toggle from lyrics (the redesign's mic, on until switched off, issue #12),
 Ignore heat warnings, and under Advanced Runs on (Automatic: the Neural Engine
 beside the CPU; CPU only) and Prepare after updates, all applying straight away. Lock screen, on the main
 page under either look, opens the lock screen widget's page, titled Lock screen: Widget (the line in place of the artist,
