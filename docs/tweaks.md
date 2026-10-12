@@ -282,6 +282,10 @@ Shared:
                   never touched. Checked on the Mac by `harness/audio-effects/build.sh route`.
                   Tested on the Mac against harness/audio-effects/ and harness/autoeq/, the hook in the simulator
                   against its sim/, the page against harness/audio-effects-page/
+    SpotifyPrefs/ Spotify's preferences object, the one Settings > Playback writes, captured as Spotify makes it at
+                  launch, for Lossless's streaming quality. Its user's settings read 0 until they are read
+                  in, about 3 s into a launch, so SGSpotifyPreferences is nil until the playback speed (a percent, never
+                  0) is set; then what Lossless left to do is done
     Sing/         Karaoke (Sing in the code and its keys), a song's vocals turned down while it plays (Sing.h lists
                   its files): the voice model Voice model chooses (spotifyglass.sing.model, read live: Best quality,
                   the default, is Mel-Band RoFormer, MIT, exported by Vitrine for the Neural Engine and palettized to

@@ -14,7 +14,7 @@ static BOOL isSetting(NSString *key) {
     if (![key hasPrefix:@"spotifyglass."]) return NO;
     for (NSString *local in @[@"spotifyglass.adblock.counts", @"spotifyglass.privacy.counts", @"spotifyglass.update.",
                               @"spotifyglass.signing.", @"spotifyglass.onboarding.", @"spotifyglass.navbar.stock",
-                              @"spotifyglass.redesign.navbar.stock"]) {
+                              @"spotifyglass.redesign.navbar.stock", @"spotifyglass.lossless.savedQuality"]) {
         if ([key hasPrefix:local]) return NO;
     }
     return YES;
