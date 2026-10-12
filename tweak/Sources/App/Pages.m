@@ -73,7 +73,7 @@ static SGModRow *untestedRow(void) {
         }]];
         [SGTopController() presentViewController:alert animated:YES completion:nil];
     };
-    return SGWithTile(row, @"sparkles", UIColor.systemPurpleColor);
+    return SGWithTile(row, @"sparkles", UIColor.systemIndigoColor);
 }
 
 SGModRow *SGRedesignedUIRow(void) {
@@ -85,7 +85,7 @@ SGModRow *SGRedesignedUIRow(void) {
         SGSetRedesignedUI(on);
         offerRestart(on);
     };
-    return SGWithTile(redesign, @"sparkles", UIColor.systemPurpleColor);
+    return SGWithTile(redesign, @"sparkles", UIColor.systemIndigoColor);
 }
 
 // The stored look's own rows, then the font and the app icon, which work under either look on any iOS.

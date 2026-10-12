@@ -708,9 +708,10 @@ page. It sorts every
 setting by the part of Spotify it changes, so a part's glass, its hide switches and its flags sit on
 one page, the mod's own rows first and Spotify's flags below them or on a sub page named after what
 they change. Its main page groups the rows by what they are, in cards with no headings as Settings has its own,
-under the signing and environment warnings: Redesigned UI, Appearance and Tab bar; Player, Lyrics and Albums &
-artists (Home & Library in the native look); Karaoke, Spatial voice (where the iPhone reads headphone motion), Audio
-effects, Vibrations, Live Activity, AirPods gestures and Listening stats; Lock screen and Premium, ads & privacy; Labs and All flags; Mod. It is checked in the simulator
+under the signing and environment warnings: Redesigned UI, Appearance and Tab bar, with a restart note; Home & Library
+(in the native look), Player, Lyrics, Albums and Artists; Karaoke, Spatial voice (where the iPhone reads headphone
+motion), Audio effects, Live Activity, AirPods gestures and Listening stats; Lock screen, Vibrations and Premium, ads &
+privacy; Labs and All flags; Mod. It is checked in the simulator
 against harness/mod-settings/. The Appearance page has, in the native look, AMOLED (the redesign is always black), then the stored look's Accent color
 preset, a pull-down of Spotify, Apple Music and Custom read off the color stored (a color set before the presets
 existed reads as Custom, Apple Music's red as Apple Music), and Accent color, the hex and a swatch of the color in
