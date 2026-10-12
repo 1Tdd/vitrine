@@ -39,6 +39,8 @@ static BOOL probing(void) {
 // Home at rest: once a second, the calls and time of each hook since the last line, the list's layouts and the
 // frames the display link saw late, logged only for a second in which any of them happened. A Home that is
 // still and quiet logs nothing, which is the proof that nothing fires at rest (`make log | grep "home perf/s"`).
+// Off unless asked for: its display link holds the screen at up to 120 Hz while Spotify is open
+// (scripts/phone.py pref --key spotifyglass.debug.homeRestMeter --value 1, then relaunch).
 static NSUInteger sg_restFrames, sg_restHitches, sg_listLayouts;
 static CFTimeInterval sg_restLast;
 @interface SGRHomeRestMeter : NSObject
@@ -58,7 +60,7 @@ static void startRestMeter(void) {
     static NSUInteger calls[SGRHomeProbeCount];
     static CFTimeInterval time[SGRHomeProbeCount];
     static SGRHomeRestMeter *meter;
-    if (timer) return;
+    if (timer || !SGFlag(@"spotifyglass.debug.homeRestMeter", NO)) return;
     meter = [SGRHomeRestMeter new];
     CADisplayLink *link = [CADisplayLink displayLinkWithTarget:meter selector:@selector(tick:)];
     if (@available(iOS 15.0, *)) link.preferredFrameRateRange = CAFrameRateRangeMake(80, 120, 120);

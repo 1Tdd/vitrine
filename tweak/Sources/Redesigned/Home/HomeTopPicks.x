@@ -298,9 +298,7 @@ static CGFloat keptAbove(UICollectionView *shelf) {
     NSNumber *asked = objc_getAssociatedObject(layout, &kAskedKey);
     if (asked && asked.doubleValue == size.height) return;
     objc_setAssociatedObject(layout, &kAskedKey, @(size.height), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    UIView *cell = shelf.superview;
-    while (cell && ![cell isKindOfClass:UICollectionViewCell.class]) cell = cell.superview;
-    dispatch_async(dispatch_get_main_queue(), ^{ [cell invalidateIntrinsicContentSize]; });
+    SGRHomeMeasureAgain(shelf);
 }
 
 // VoiceOver reads a list's cells in their index order, which the swap no longer draws: the page's list reads
@@ -362,10 +360,7 @@ UIControl *SGRHomeTopPicksShowAll(NSString **title) {
     if (!control) SGForEachView(showAll, ^(UIView *v) {
         if (!control && [v isKindOfClass:UIControl.class]) control = (UIControl *)v;
     });
-    if (!control || showAll.bounds.size.width < 1) return nil;
-    for (UIView *v = showAll; v && v != shelf; v = v.superview) {
-        if (v.hidden) return nil;
-    }
+    if (!control || showAll.bounds.size.width < 1 || !SGShownUnder(showAll, shelf)) return nil;
     if (title) *title = SGRHomeShelfTitle(shelf);
     return control;
 }
@@ -392,20 +387,13 @@ static UILabel *footerLabel(UIFont *font, UIColor *color) {
     return label;
 }
 
-static BOOL shown(UIView *view, UIView *root) {
-    for (UIView *v = view; v && v != root; v = v.superview) {
-        if (v.hidden) return NO;
-    }
-    return YES;
-}
-
 // Spotify's labels with text, top to bottom: its first line, then its second (the kind over the name on a
 // "More like" card, the name over "Album • Artist" in Recents), then the sponsored line when there is one.
 static NSArray<UILabel *> *spotifyLabels(UIView *card, SGRLargeCardParts *parts) {
     NSMutableArray<UILabel *> *labels = [NSMutableArray array];
     SGForEachView(card, ^(UIView *v) {
         if (![v isKindOfClass:UILabel.class] || v == parts.lead || v == parts.second) return;
-        if (((UILabel *)v).text.length && shown(v, card)) [labels addObject:(UILabel *)v];
+        if (((UILabel *)v).text.length && SGShownUnder(v, card)) [labels addObject:(UILabel *)v];
     });
     return [labels sortedArrayUsingComparator:^NSComparisonResult(UILabel *a, UILabel *b) {
         CGFloat ya = [a convertRect:a.bounds toView:card].origin.y, yb = [b convertRect:b.bounds toView:card].origin.y;
@@ -416,6 +404,13 @@ static NSArray<UILabel *> *spotifyLabels(UIView *card, SGRLargeCardParts *parts)
 static void restore(UIView *card, SGRLargeCardParts *parts) {
     UIView *holder = SGRFindByIdentifier(card, @"Encore.ImageView", &kCoverKey);
     if (holder && !CGAffineTransformIsIdentity(holder.transform)) holder.transform = CGAffineTransformIdentity;
+    // The corners go back to all four; roundCover (HomeCards.x) sets the small card's radius on its next pass.
+    CACornerMask all = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+    for (UIView *sub in holder.subviews) {
+        if ([sub isKindOfClass:UIImageView.class] && sub.layer.maskedCorners != all) sub.layer.maskedCorners = all;
+    }
+    card.layer.cornerRadius = 0;
+    card.layer.masksToBounds = NO;
     [parts.surface removeFromSuperview];
     [parts.lead removeFromSuperview];
     [parts.second removeFromSuperview];
@@ -481,7 +476,8 @@ static BOOL styleLargeCard(UIView *card) {
     for (UIView *sub in holder.subviews) {
         if ([sub isKindOfClass:UIImageView.class]) cover = (UIImageView *)sub;
     }
-    if (card.bounds.size.width < kLargeCard || !cover) {
+    // In the large shelf, not just wide: a shortcut tile is 200pt on a 440pt phone.
+    if (!SGRHomeInTopPicks(card) || card.bounds.size.width < kLargeCard || !cover) {
         if (parts) restore(card, parts);
         return NO;
     }

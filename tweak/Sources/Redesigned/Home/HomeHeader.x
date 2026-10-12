@@ -133,17 +133,13 @@ static BOOL chosen(UIControl *chip) {
     return solid;
 }
 
-static void press(UIControl *control) {
-    [control sendActionsForControlEvents:UIControlEventTouchUpInside | UIControlEventPrimaryActionTriggered];
-}
-
 static NSArray<UIMenuElement *> *menuElements(void) {
     NSMutableArray<UIMenuElement *> *elements = [NSMutableArray array];
     NSMutableArray<UIMenuElement *> *filters = [NSMutableArray array];
     for (UIControl *chip in chips(sg_stack)) {
         __weak UIControl *weakChip = chip;
         UIAction *action = [UIAction actionWithTitle:chip.accessibilityLabel ?: @"" image:nil identifier:nil handler:^(UIAction *a) {
-            if (weakChip) press(weakChip);
+            if (weakChip) SGRActivate(weakChip);
         }];
         action.state = chosen(chip) ? UIMenuElementStateOn : UIMenuElementStateOff;
         [filters addObject:action];
@@ -154,7 +150,7 @@ static NSArray<UIMenuElement *> *menuElements(void) {
     if (connect) {
         __weak UIControl *weakConnect = connect;
         [more addObject:[UIAction actionWithTitle:@"Devices" image:[UIImage systemImageNamed:@"hifispeaker"] identifier:nil handler:^(UIAction *a) {
-            if (weakConnect) press(weakConnect);
+            if (weakConnect) SGRActivate(weakConnect);
         }]];
     }
     NSString *title = nil;
@@ -163,7 +159,7 @@ static NSArray<UIMenuElement *> *menuElements(void) {
         __weak UIControl *weakShowAll = showAll;
         [more addObject:[UIAction actionWithTitle:title.length ? [NSString stringWithFormat:@"Show all · %@", title] : @"Show all"
                                             image:[UIImage systemImageNamed:@"rectangle.stack"] identifier:nil handler:^(UIAction *a) {
-            if (weakShowAll) press(weakShowAll);
+            if (weakShowAll) SGRActivate(weakShowAll);
         }]];
     }
     if (more.count) [elements addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:more]];

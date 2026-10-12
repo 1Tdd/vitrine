@@ -91,7 +91,8 @@ static void relayoutButtonAround(UIView *view);
 
 static void retextedUnder(UIView *label) {
     CFTimeInterval began = SGRHomeProbeBegin();
-    BOOL ours = [label.accessibilityIdentifier hasSuffix:@"-internal"] || [label.accessibilityIdentifier hasSuffix:@".playback"];
+    NSString *identifier = label.accessibilityIdentifier;
+    BOOL ours = [identifier hasSuffix:@"-internal"] || [identifier hasSuffix:@".playback"];
     if (ours) relayoutButtonAround(label);
     SGRHomeProbeEnd(SGRHomeProbeLabels, began);
     if (ours) SGRHomeProbeEnd(SGRHomeProbeLabelsMatched, began);

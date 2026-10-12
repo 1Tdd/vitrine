@@ -17,9 +17,9 @@ UIViewController *SGRHomeSettingsPage(void) {
     SGModRow *look = SGSwitchRow(@"Home look", @"Top picks, the tinted shortcut pills and the title's glass pill; off, Home as the redesign had it", SGRKeyHomeLook);
     SGModRow *topPicks = SGRHomeTopPicksRow();
     topPicks.waitsOn = SGRKeyHomeLook;
-    from.waitsOn = SGRKeyHomeLook;
+    from.waitsOn = SGRKeyHomeTopPicks;
     SGModRow *colour = SGSwitchRow(@"Color behind Top picks", nil, SGRKeyHomeTopPicksColour);
-    colour.waitsOn = SGRKeyHomeLook;
+    colour.waitsOn = SGRKeyHomeTopPicks;
 
     NSMutableArray<SGModRow *> *rows = [NSMutableArray array];
     for (NSString *identity in shelves) [rows addObject:SGShownRow(identity, nil, SGRHomeShelfHideKey(identity))];

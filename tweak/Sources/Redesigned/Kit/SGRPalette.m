@@ -210,15 +210,22 @@ static BOOL dominantColorOf(CGImageRef image, CGFloat out[3]) {
     return found;
 }
 
+// Saturation lifted by `lift` up to `max`, in HSB on the encoded color; `linear` in and out in linear light.
+static void liftSaturation(CGFloat linear[3], CGFloat lift, CGFloat max) {
+    CGFloat r = toEncoded(linear[0]), g = toEncoded(linear[1]), b = toEncoded(linear[2]), h = 0, s = 0, v = 0, a = 1;
+    [[UIColor colorWithRed:r green:g blue:b alpha:1] getHue:&h saturation:&s brightness:&v alpha:&a];
+    [[UIColor colorWithHue:h saturation:MIN(max, MAX(s, s * lift)) brightness:v alpha:1] getRed:&r green:&g blue:&b alpha:&a];
+    linear[0] = toLinear(r), linear[1] = toLinear(g), linear[2] = toLinear(b);
+}
+
 #pragma mark - flow
 
 // A dominant color in linear light made fit for a moving field: a little more colorful, and within
 // the luminance band that keeps white text readable on it.
 static UIColor *flowColorFor(const CGFloat linear[3], CGFloat ceiling) {
-    CGFloat r = toEncoded(linear[0]), g = toEncoded(linear[1]), b = toEncoded(linear[2]), h = 0, s = 0, v = 0, a = 1;
-    [[UIColor colorWithRed:r green:g blue:b alpha:1] getHue:&h saturation:&s brightness:&v alpha:&a];
-    [[UIColor colorWithHue:h saturation:MIN(kFlowSaturationMax, MAX(s, s * kFlowSaturationLift)) brightness:v alpha:1] getRed:&r green:&g blue:&b alpha:&a];
-    CGFloat lr = toLinear(r), lg = toLinear(g), lb = toLinear(b);
+    CGFloat lifted[3] = {linear[0], linear[1], linear[2]};
+    liftSaturation(lifted, kFlowSaturationLift, kFlowSaturationMax);
+    CGFloat lr = lifted[0], lg = lifted[1], lb = lifted[2];
     CGFloat luminance = 0.2126 * lr + 0.7152 * lg + 0.0722 * lb;
     CGFloat k = 1;
     if (luminance > ceiling) k = ceiling / luminance;
@@ -250,13 +257,7 @@ static UIColor *tintOf(CGImageRef image, UIColor *surface, BOOL strong) {
     CGFloat linear[3];
     CGFloat r = 0, g = 0, b = 0, a = 1;
     if (!dominantColorOf(image, linear) || ![surface getRed:&r green:&g blue:&b alpha:&a]) return nil;
-    if (strong) {
-        // The saturation lift, in HSB on the encoded color, then back to linear light for the luminance cap.
-        CGFloat h = 0, s = 0, v = 0, lr = 0, lg = 0, lb = 0;
-        [[UIColor colorWithRed:toEncoded(linear[0]) green:toEncoded(linear[1]) blue:toEncoded(linear[2]) alpha:1] getHue:&h saturation:&s brightness:&v alpha:&a];
-        [[UIColor colorWithHue:h saturation:MIN(kTintSaturationMax, MAX(s, s * kTintSaturationLift)) brightness:v alpha:1] getRed:&lr green:&lg blue:&lb alpha:&a];
-        linear[0] = toLinear(lr), linear[1] = toLinear(lg), linear[2] = toLinear(lb);
-    }
+    if (strong) liftSaturation(linear, kTintSaturationLift, kTintSaturationMax);
     CGFloat cap = strong ? kTintLuminance : kFaintTintLuminance;
     CGFloat luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
     if (luminance > cap) {

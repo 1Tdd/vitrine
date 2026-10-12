@@ -45,13 +45,6 @@ static UIView *headingAround(UIView *button) {
     return nil;
 }
 
-static BOOL shown(UIView *view, UIView *root) {
-    for (UIView *v = view; v && v != root; v = v.superview) {
-        if (v.hidden) return NO;
-    }
-    return YES;
-}
-
 // The label that is the title: the largest text showing under the button, its own label aside. A label the stack
 // has not sized yet counts, since the constraints take its place from the layout rather than from its bounds.
 static UILabel *titleLabelIn(UIView *button, UILabel *mine) {
@@ -59,7 +52,7 @@ static UILabel *titleLabelIn(UIView *button, UILabel *mine) {
     SGForEachView(button, ^(UIView *v) {
         if (v == mine || ![v isKindOfClass:UILabel.class]) return;
         UILabel *label = (UILabel *)v;
-        if (!label.text.length || !shown(label, button)) return;
+        if (!label.text.length || !SGShownUnder(label, button)) return;
         if (!title || label.font.pointSize > title.font.pointSize) title = label;
     });
     return title;
@@ -113,7 +106,7 @@ static void restyle(UIView *button) {
     // Whether "Show all" is offered is read off the hidden flags, not off its width: it has none to go by until
     // the layout resolves, and a title held to the heading's own edge then ran under it.
     UIView *showAll = SGRFindByIdentifier(heading, @"Components.UI.NavigationButtonHome", &kShowAllKey);
-    BOOL offered = showAll && shown(showAll, heading);
+    BOOL offered = showAll && SGShownUnder(showAll, heading);
     UIView *limit = offered ? showAll : heading;
     if (added || held.label != theirs || held.limit != limit) {
         if (held.constraints) [NSLayoutConstraint deactivateConstraints:held.constraints];

@@ -18,13 +18,6 @@
 static const NSTimeInterval kSeenFor = 30 * 24 * 3600, kSeenWriteEvery = 3600;
 static char kHeadingKey;
 
-static BOOL shown(UIView *view, UIView *root) {
-    for (UIView *v = view; v && v != root; v = v.superview) {
-        if (v.hidden) return NO;
-    }
-    return YES;
-}
-
 // The labels found last time, good while the title label is the same one with the same text: a shelf is measured
 // and laid out many times a scroll, and the walk (and the layout it forces first) would run on each.
 @interface SGRHomeHeadingCache : NSObject
@@ -58,7 +51,7 @@ static BOOL headingLabels(UIView *shelf, UILabel **title, UILabel **over) {
     SGForEachView(button, ^(UIView *v) {
         if (![v isKindOfClass:UILabel.class] || ![v.accessibilityIdentifier containsString:@"Encore.Label"]) return;
         UILabel *label = (UILabel *)v;
-        if (!label.text.length || !shown(label, button)) return;
+        if (!label.text.length || !SGShownUnder(label, button)) return;
         if (!largest || label.font.pointSize > largest.font.pointSize) {
             if (largest) small = largest;
             largest = label;

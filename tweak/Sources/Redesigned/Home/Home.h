@@ -22,8 +22,8 @@
 
 // The Home look (the first row of the Home page): Top picks and the color behind it, the tinted glass shortcut
 // pills with their bold names, the title's glass pill with the filter menu and the page's color. Off, none of
-// those hooks install and Home is as the redesign drew it before (main at 5051da55). On until switched off; read
-// at launch (SGRHomeLook).
+// those hooks install and Home has the plain shortcuts and title. On until switched off; read at launch
+// (SGRHomeLook).
 #define SGRKeyHomeLook @"spotifyglass.redesign.home.look"
 BOOL SGRHomeLook(void);
 // Top picks (HomeTopPicks.x): the shelf nearest the top drawn large above the shortcuts. On until switched off.
