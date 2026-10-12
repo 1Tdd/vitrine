@@ -111,7 +111,26 @@ static int checkLight(NSURL *sing) {
                     @"weights/weight.bin": @209077208});
     standIn(old, @{@"model.mil": @669061});
     CHECK(SGSingChosenModel() == SGSingModelFull && [SGSingModelURL().path isEqualToString:full.path], @"the full model is the default");
+    // The key changed another way (a settings import), with no generation bump: Light, not downloaded, is checked anyway.
+    [NSUserDefaults.standardUserDefaults setInteger:SGSingModelLight forKey:SGKeySingModel];
+    CHECK(!SGSingModelURL(), @"a key changed by another way is checked again: Light reads missing, not its folder unchecked (%@)", SGSingModelURL().path);
+    [NSUserDefaults.standardUserDefaults removeObjectForKey:SGKeySingModel];
+    CHECK([SGSingModelURL().path isEqualToString:full.path], @"and the full model again once the key goes back");
+
+    // Light's download stopped by a switch and Light removed at once: the stop's resume data, written later, does not
+    // bring a file of it back.
     SGSetSingChosenModel(SGSingModelLight);
+    SGSingDownloadModelOverCellular();
+    runUntil(^BOOL { return SGSingModelProgress() >= 0.3 || SGSingModelCurrentState() != SGSingModelDownloading; }, 600);
+    CHECK(SGSingModelCurrentState() == SGSingModelDownloading, @"Light's download runs into its weights (%.0f%%)", SGSingModelProgress() * 100);
+    SGSetSingChosenModel(SGSingModelFull);
+    SGSingDeleteOtherModel();
+    runUntil(^BOOL { return NO; }, 5);
+    NSArray *after = [NSFileManager.defaultManager contentsOfDirectoryAtPath:sing.path error:nil];
+    CHECK(SGSingOtherModelBytes() == 0 && ![[after componentsJoinedByString:@" "] containsString:@"light"],
+          @"switched and removed mid-download, nothing of Light is left (%@)", [after componentsJoinedByString:@", "]);
+    SGSetSingChosenModel(SGSingModelLight);
+    CHECK(SGSingModelPausedBytes() == 0, @"and Light has no paused bytes");
     CHECK(SGSingModelCurrentState() == SGSingModelMissing && !SGSingModelURL(), @"chosen, Light reads missing: the full model does not stand in for it");
     CHECK(SGSingOtherModelBytes() > 209077208, @"the other model's bytes count the full model and the old one (%lld)", SGSingOtherModelBytes());
     printf("Light's size reads %s, the full model's %s\n", SGSingModelSizeText().UTF8String, SGSingModelSizeTextOf(SGSingModelFull).UTF8String);

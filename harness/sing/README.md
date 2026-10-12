@@ -253,7 +253,10 @@ from the old model (`separator.mlmodelc`, stood in by sparse files of its sizes)
 finds both. `dev` checks the FLEX build's dev folder. `light` chooses the light model with the full one and the old
 one stood in: it reads missing (the full one does not stand in for it), downloads from `separator-light.mlmodelc`, is
 left alone by the launch's cleanup, switches to the full model and back with no download, and the other model's
-removal and its own each leave the other alone. Every mode starts on the full model: the defaults outlive the
+removal and its own each leave the other alone. Before that it sets the key directly, as a settings import would
+(Light must read missing, not its folder unchecked), and stops Light's download mid-weights by switching to the full
+model and removes Light at once (the stop's late resume data must not bring a file of it back); built on the code
+before these fixes (a663fcf8), both fail. Every mode starts on the full model: the defaults outlive the
 `CFFIXED_USER_HOME` folder.
 
     download/build.sh && CFFIXED_USER_HOME="$(mktemp -d)" build/download 0.2

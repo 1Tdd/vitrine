@@ -299,10 +299,10 @@ Shared:
                   (SGSingRemoveOldModel, which logs the space freed), Sing moving to the new one at its next load;
                   loaded only while Spotify
                   is active (SGSingLoader.m), on any iPhone with iOS 18, a CPU copy first and warmed, only with 1 GB left to the
-                  process (no floor on the iPhone's memory: both copies warm add 0.1 GB of footprint), then on Automatic, where the iPhone has a
+                  process (0.4 GB for Light, and 1.6 or 0.65 GB beside a load still out; no floor on the iPhone's memory: both copies warm add 0.1 GB of footprint), then on Automatic, where the iPhone has a
                   Neural Engine, a Neural Engine copy of the same model beside it, which takes every window once it is
                   in, in the background too, each load with a deadline and kept a minute after the mic goes off; the
-                  Neural Engine copy loads only with 0.5 GB left to the process, its first load after every install
+                  Neural Engine copy loads only with 0.5 GB left to the process (0.25 GB for Light), its first load after every install
                   compiling it for up to ten minutes while Karaoke runs on the CPU (while it loads, the CPU's falling
                   behind spends none of the 8 s after which Karaoke gives a song up, nor counts toward its three in a
                   row), unless Prepare after updates (on by default) compiled it already: with the model in and the mic off, 15 s after

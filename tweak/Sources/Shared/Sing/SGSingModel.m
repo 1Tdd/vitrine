@@ -179,6 +179,8 @@ static double sg_progress;
 static BOOL sg_waitingForNetwork;   // offline, or on cellular unless allowed: the session holds the request
 static BOOL sg_cellular;            // the download may use cellular and Low Data Mode networks
 static BOOL sg_checking;            // the weights' checksum is being read
+// Removals of each model (kModels' order), main thread: a stopped download's late resume data checks it.
+static NSUInteger sg_removals[2];
 
 @implementation SGSingDownloader {
     NSURLSession *_session;
@@ -216,10 +218,16 @@ static BOOL sg_checking;            // the weights' checksum is being read
         return;
     }
     NSURL *resume = resumeFile(self.model, self.file);
+    NSUInteger index = (NSUInteger)(self.model - kModels), removals = sg_removals[index];
     [task cancelByProducingResumeData:^(NSData *data) {
-        if (data) [data writeToURL:resume atomically:YES];
-        SGLog(@"sing: the download is stopped%@", data ? @", what came in is kept" : @"");
         [session invalidateAndCancel];
+        // On the main thread, where models are removed: a removal since the stop wins, as the resume data would bring
+        // back a file of the model it removed.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            BOOL removed = sg_removals[index] != removals;
+            if (data && !removed) [data writeToURL:resume atomically:YES];
+            SGLog(@"sing: the download is stopped%@", removed ? @", and what came in is dropped with its model" : data ? @", what came in is kept" : @"");
+        });
     }];
 }
 
@@ -313,6 +321,8 @@ static BOOL sg_checking;            // the weights' checksum is being read
 // The file is checked here, before the session deletes it, and kept in the staging folder if it is the one
 // pinned.
 - (void)URLSession:(NSURLSession *)session downloadTask:(NSURLSessionDownloadTask *)task didFinishDownloadingToURL:(NSURL *)location {
+    // Stopped as the file came in: keeping it would put back a staging folder a removal may have just taken away.
+    if (_cancelled) return;
     SGSingFile file = self.model->files[self.file];
     NSInteger status = [task.response isKindOfClass:NSHTTPURLResponse.class] ? ((NSHTTPURLResponse *)task.response).statusCode : 0;
     BOOL answered = status == 200 || status == 206;
@@ -380,13 +390,16 @@ SGSingModelState SGSingModelCurrentState(void) {
 }
 
 NSURL *SGSingModelURL(void) {
-    // Checked by size once a launch, and again after a download, a delete or a switch changes it.
+    // Checked by size once a launch, and again after a download, a delete or a switch changes it, or the key changes by
+    // another way (a settings import): a folder not checked could be missing a file, which crashes Core ML.
     static int known = -1, oldKnown = -1;
     static NSURL *dev;
     static NSUInteger knownGeneration = NSUIntegerMax;
+    static const SGSingModelFiles *knownModel;
     const SGSingModelFiles *model = chosen();
-    if (knownGeneration != sg_modelGeneration) {
+    if (knownGeneration != sg_modelGeneration || knownModel != model) {
         knownGeneration = sg_modelGeneration;
+        knownModel = model;
         known = complete(model);
         // The old model stands in for the full one alone: it is the full one's earlier export.
         oldKnown = model == &kModels[SGSingModelFull] && oldComplete();
@@ -556,6 +569,7 @@ static const SGSingModelFiles *unchosen(void) {
 }
 
 static void removeModel(const SGSingModelFiles *model) {
+    sg_removals[model - kModels]++;
     long long freed = 0;
     removeAll(filesOf(model), &freed);
     [NSUserDefaults.standardUserDefaults removeObjectForKey:model->pausedKey];
