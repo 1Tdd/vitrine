@@ -363,7 +363,13 @@ static void layoutHeader(UIViewController *page);
 static const NSUInteger kHeaderWaits = 30;
 static const NSTimeInterval kHeaderWait = 0.1;
 static void layoutHeaderOnceSized(UIViewController *page, UIView *header) {
-    if (!CGRectIsEmpty(header.bounds)) return;
+    // findHeader answers YES on the stack alone, so the header can be gone while the stack is not.
+    if (!header) return;
+    if (!CGRectIsEmpty(header.bounds)) {
+        // Sized: a later spell without a size gets its waits again.
+        if (objc_getAssociatedObject(header, &kWatchKey)) objc_setAssociatedObject(header, &kWatchKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        return;
+    }
     NSUInteger waits = [objc_getAssociatedObject(header, &kWatchKey) unsignedIntegerValue];
     if (waits >= kHeaderWaits) return;
     objc_setAssociatedObject(header, &kWatchKey, @(waits + 1), OBJC_ASSOCIATION_RETAIN_NONATOMIC);

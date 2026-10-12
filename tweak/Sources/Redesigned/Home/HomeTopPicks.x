@@ -131,6 +131,9 @@ static __weak UICollectionViewLayout *sg_blocksLayout;
 static BOOL sg_blocksKnown, sg_blocksSwap;
 static CGRect sg_blocksGrid, sg_blocksShelf;
 static CGFloat sg_blocksBefore;
+// The sections the cached frames belong to: move() reads these, not the globals, which the measuring can change
+// between two queries of one pass.
+static NSInteger sg_blocksGridSection, sg_blocksShelfSection;
 
 static BOOL blocks(UICollectionViewLayout *layout, CGRect *grid, CGRect *shelf, CGFloat *before) {
     if (!objc_getAssociatedObject(layout, &kListKey)) return NO;
@@ -144,6 +147,8 @@ static BOOL blocks(UICollectionViewLayout *layout, CGRect *grid, CGRect *shelf, 
     sg_blocksKnown = YES;
     sg_blocksSwap = NO;
     NSInteger shelfSection = sg_topIndex == NSIntegerMax ? NSNotFound : sg_topIndex / 10000, shelfItem = sg_topIndex % 10000;
+    sg_blocksGridSection = sg_gridSection;
+    sg_blocksShelfSection = shelfSection;
     if (sg_gridSection == NSNotFound || shelfSection == NSNotFound || sg_gridSection >= shelfSection) return NO;
     UICollectionView *list = layout.collectionView;
     NSInteger sections = list.numberOfSections;
@@ -179,9 +184,9 @@ static BOOL blocks(UICollectionViewLayout *layout, CGRect *grid, CGRect *shelf, 
 // top); the grid and everything between it and the shelf move down by the shelf's block, the gap above the shelf
 // (its section inset) kept between the two.
 static void move(UICollectionViewLayoutAttributes *attributes, CGRect grid, CGRect shelf, CGFloat before) {
-    NSInteger section = attributes.indexPath.section, shelfSection = sg_topIndex / 10000;
+    NSInteger section = attributes.indexPath.section, gridSection = sg_blocksGridSection, shelfSection = sg_blocksShelfSection;
     CGRect frame = attributes.frame;
-    if (section >= sg_gridSection && section < shelfSection) frame.origin.y += CGRectGetMaxY(shelf) - before + kBandAbove;
+    if (section >= gridSection && section < shelfSection) frame.origin.y += CGRectGetMaxY(shelf) - before + kBandAbove;
     else if (section == shelfSection) frame.origin.y += CGRectGetMinY(grid) - CGRectGetMinY(shelf) + kBandAbove;
     else return;
     attributes.frame = frame;
@@ -266,6 +271,7 @@ static void move(UICollectionViewLayoutAttributes *attributes, CGRect grid, CGRe
 // and every shelf on screen is measured again, so the next one takes the place now rather than on the next scroll.
 static void topLost(UICollectionView *list) {
     sg_topIndex = NSIntegerMax;
+    sg_blocksKnown = NO;
     sg_largeShelf = nil;
     SGRHomeSetPageTint(nil);
     static Class shelf;
@@ -294,9 +300,11 @@ static void topLost(UICollectionView *list) {
         if (index == sg_topIndex) topLost((UICollectionView *)list);
         // The shortcuts grid is the one bare list Home has (HomeSections.x); a section of anything else in its place
         // (no shortcuts) leaves the order alone.
-        BOOL grid = [root isKindOfClass:UICollectionView.class] && !root.accessibilityIdentifier.length && result.size.height > 0;
+        BOOL grid = [root isKindOfClass:UICollectionView.class] && !(shelf && [root isKindOfClass:shelf]) && !root.accessibilityIdentifier.length
+                    && result.size.height > 0;
         if (grid) sg_gridSection = attributes.indexPath.section;
         else if (attributes.indexPath.section == sg_gridSection) sg_gridSection = NSNotFound;
+        sg_blocksKnown = NO;
         return result;
     }
     UICollectionViewLayout *layout = ((UICollectionView *)root).collectionViewLayout;
@@ -339,8 +347,8 @@ static void topLost(UICollectionView *list) {
     // Never shorter than what the shelf lays out: Spotify's height can be taken before its tallest card sized
     // itself (a title on 4 lines), and the shelf then scrolls inside its cell. The shelf's height comes from its
     // cards, not from the cell, so taking it does not feed back.
-    if (natural && large && grow) result.size = CGSizeMake(result.size.width, MAX(natural.doubleValue + grow.doubleValue,
-                                                                              ceil(layout.collectionViewContentSize.height)) - offset);
+    if (natural && large && grow) result.size = CGSizeMake(result.size.width, MAX(natural.doubleValue + grow.doubleValue - offset,
+                                                                              ceil(layout.collectionViewContentSize.height)));
     else if (natural && was) result.size = CGSizeMake(result.size.width, natural.doubleValue);
     return result;
 }
@@ -546,18 +554,19 @@ static BOOL styleLargeCard(UIView *card) {
         parts.cover.userInteractionEnabled = NO;
         parts.cover.accessibilityElementsHidden = YES;
         objc_setAssociatedObject(card, &kPartsKey, parts, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        __weak UIView *weakCard = card;
-        // The block is replaced on every pass, so a cover taken into another card tells the card it is in now.
-        SGRObserveImage(cover, ^(UIImageView *view) {
-            UIView *strongCard = weakCard;
-            if (!strongCard || ![view isDescendantOfView:strongCard]) return;
-            SGRLargeCardParts *now = objc_getAssociatedObject(strongCard, &kPartsKey);
-            if (now.cover.image != view.image) now.cover.image = view.image;
-            tintCard(strongCard, view);
-        });
         static dispatch_once_t once;
         dispatch_once(&once, ^{ SGLog(@"redesign home: top picks card %@ styled", NSStringFromCGRect(card.bounds)); });
     }
+    // On every pass: the block is replaced, so a cover taken into another card tells the card it is in now, and a
+    // card given a new image view is followed from this pass on.
+    __weak UIView *weakCard = card;
+    SGRObserveImage(cover, ^(UIImageView *view) {
+        UIView *strongCard = weakCard;
+        if (!strongCard || ![view isDescendantOfView:strongCard]) return;
+        SGRLargeCardParts *now = objc_getAssociatedObject(strongCard, &kPartsKey);
+        if (now.cover.image != view.image) now.cover.image = view.image;
+        tintCard(strongCard, view);
+    });
     CALayer *layer = card.layer;
     if (layer.cornerRadius != SGRRadiusCard) layer.cornerRadius = SGRRadiusCard;
     if (layer.cornerCurve != kCACornerCurveContinuous) layer.cornerCurve = kCACornerCurveContinuous;

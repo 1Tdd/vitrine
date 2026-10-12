@@ -47,11 +47,19 @@ static void calmDJ(UIView *card) {
     }
 }
 
+// The button's content (Encore's card, the cover's holder, a tile's row with its playing indicator) is laid out after
+// the button's own pass otherwise; brought up to date now, the styling reads final frames.
+static void settle(UIView *button) {
+    if (!SGRHomeLook()) return;
+    for (UIView *sub in button.subviews) [sub layoutIfNeeded];
+}
+
 static void style(UIView *button) {
     NSString *identifier = button.accessibilityIdentifier;
     // Spotify reuses a button across kinds (a tile's became a shelf card on the phone, 2026-10-11): what the other
     // kind put on it comes off first.
     if ([identifier isEqualToString:@"Shortcut.Card.Home"]) {
+        settle(button);
         SGRHomeStyleLargeCard(button);
         CGFloat radius = SGRHomeLook() ? SGRHomeTileRadius : SGRRadiusCover;
         roundCorners(button, radius);
@@ -60,6 +68,7 @@ static void style(UIView *button) {
         return;
     }
     if ([identifier isEqualToString:@"Components.UI.HomeCard"]) {
+        settle(button);
         SGRHomeUnstyleTile(button);
         if (!SGRHomeStyleLargeCard(button)) roundCover(button);
         return;
@@ -78,11 +87,6 @@ static void style(UIView *button) {
 - (void)layoutSubviews {
     %orig;
     CFTimeInterval began = SGRHomeProbeBegin();
-    // The button's content (Encore's card, the cover's holder, a tile's row with its playing indicator) is laid out
-    // after the button's own pass otherwise; brought up to date now, the styling reads final frames.
-    if (SGRHomeLook()) {
-        for (UIView *sub in ((UIView *)self).subviews) [sub layoutIfNeeded];
-    }
     style((UIView *)self);
     SGRHomeProbeEnd(SGRHomeProbeCards, began);
 }
@@ -103,6 +107,8 @@ static void retextedUnder(UIView *label) {
     if (ours) SGRHomeProbeEnd(SGRHomeProbeLabelsMatched, began);
 }
 
+// The walk is 20 to 30 ns a call (measured 2026-10-12 against an isDescendantOfView: check on Home's list, which is
+// no cheaper and would miss a label that joins the window before its card does), so no cheaper gate is kept.
 static void relayoutButtonAround(UIView *label) {
     static Class backing;
     if (!backing) backing = NSClassFromString(@"_TtC19LegacyUI_ECMCoreKit31InteractableLayoutBackingButton");
@@ -135,7 +141,15 @@ static void relayoutButtonAround(UIView *label) {
 %hook SPTEncoreLabel
 - (void)didMoveToWindow {
     %orig;
-    if (((UIView *)self).window) relayoutButtonAround((UIView *)self);
+    UIView *label = (UIView *)self;
+    if (!label.window) return;
+    CFTimeInterval began = SGRHomeProbeBegin();
+    // Spotify's card and tile text (id Encore.Label, Shortcut.Card.Home.Content.title); the rest of its labels pass.
+    NSString *identifier = label.accessibilityIdentifier;
+    BOOL ours = [identifier isEqualToString:@"Encore.Label"] || [identifier hasSuffix:@".Content.title"];
+    if (ours) relayoutButtonAround(label);
+    SGRHomeProbeEnd(SGRHomeProbeLabels, began);
+    if (ours) SGRHomeProbeEnd(SGRHomeProbeLabelsMatched, began);
 }
 %end
 
