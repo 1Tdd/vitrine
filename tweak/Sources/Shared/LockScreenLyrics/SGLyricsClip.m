@@ -254,7 +254,8 @@ static AVAssetTrack *motionTrack(AVURLAsset *asset, Motion *motion) {
     // shortcut: a turned video (none seen among Canvases or Apple Music's covers) falls back to the blurred
     // cover; drawing the words turned with it is the step up if one turns up.
     if (!track || !CGAffineTransformIsIdentity(track.preferredTransform)) return nil;
-    CGSize stored = track.naturalSize;
+    // Whole pixels: the decoded frames are, and drawOver checks each against this.
+    CGSize stored = CGSizeMake(round(track.naturalSize.width), round(track.naturalSize.height));
     double length = CMTimeGetSeconds(track.timeRange.duration);
     if (stored.width < 16 || stored.height < 16 || !(length > 0)) return nil;
     CGSize cut = stored.width / stored.height > 0.75 ? CGSizeMake(stored.height * 0.75, stored.height)
@@ -317,8 +318,9 @@ static void freeOver(Over over) {
 
 // The softening, the dimming and the words, drawn into `buffer`, a BGRA frame of the video: the rows behind
 // the words blurred (Accelerate's tent blur) and faded in, every row of the cut darkened by its share in one
-// pass, and one image the size of the words. All on the CPU.
-static void drawOver(CVPixelBufferRef buffer, Motion motion, Over over) {
+// pass, and one image the size of the words. All on the CPU. NO, with the frame left as it is, for a frame of
+// another size or format than the track states, so the clip is not written without its words.
+static BOOL drawOver(CVPixelBufferRef buffer, Motion motion, Over over) {
     CVPixelBufferLockBaseAddress(buffer, 0);
     uint8_t *base = CVPixelBufferGetBaseAddress(buffer);
     size_t bytesPerRow = CVPixelBufferGetBytesPerRow(buffer);
@@ -331,7 +333,7 @@ static void drawOver(CVPixelBufferRef buffer, Motion motion, Over over) {
         || frameWidth != (size_t)motion.stored.width || frameHeight != (size_t)motion.stored.height || bytesPerRow < frameWidth * 4
         || !CGRectContainsRect(frame, cut) || (over.blurred && !CGRectContainsRect(frame, over.soft))) {
         CVPixelBufferUnlockBaseAddress(buffer, 0);
-        return;
+        return NO;
     }
     if (over.blurred) {
         // An image counts its rows from the top, Core Graphics from the bottom.
@@ -365,6 +367,7 @@ static void drawOver(CVPixelBufferRef buffer, Motion motion, Over over) {
         CGContextRelease(context);
     }
     CVPixelBufferUnlockBaseAddress(buffer, 0);
+    return YES;
 }
 
 // Each frame of the video from `from` seconds (taken round its length) for `seconds`, round its end as often
@@ -423,7 +426,7 @@ CGImageRef SGLyricsClipMotionFrame(NSURL *motionFile, NSString *previous, NSStri
     __block CGImageRef frame = NULL;
     eachFrame(asset, track, motion, from, motion.length, ^BOOL(CMSampleBufferRef sample) {
         CVPixelBufferRef buffer = CMSampleBufferGetImageBuffer(sample);
-        drawOver(buffer, motion, over);
+        if (!drawOver(buffer, motion, over)) return NO;
         CVPixelBufferLockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
         CGContextRef context = newContext(motion.stored, CVPixelBufferGetBaseAddress(buffer), CVPixelBufferGetBytesPerRow(buffer));
         CGImageRef whole = CGBitmapContextCreateImage(context);
@@ -463,7 +466,10 @@ BOOL SGLyricsClipWriteOverMotion(NSURL *file, NSURL *motionFile, NSString *previ
     Over over = makeOver(motion, previous, line, next);
     __block BOOL ok = YES, any = NO;
     BOOL read = eachFrame(asset, track, motion, from, seconds, ^BOOL(CMSampleBufferRef sample) {
-        drawOver(CMSampleBufferGetImageBuffer(sample), motion, over);
+        if (!drawOver(CMSampleBufferGetImageBuffer(sample), motion, over)) {
+            ok = NO;
+            return NO;
+        }
         while (!input.readyForMoreMediaData && writer.status == AVAssetWriterStatusWriting) [NSThread sleepForTimeInterval:0.002];
         ok = writer.status == AVAssetWriterStatusWriting && [input appendSampleBuffer:sample];
         any = YES;
@@ -482,4 +488,10 @@ BOOL SGLyricsClipWriteOverMotion(NSURL *file, NSURL *motionFile, NSString *previ
     if (writer.status != AVAssetWriterStatusCompleted) return NO;
     [NSFileManager.defaultManager removeItemAtURL:file error:nil];
     return [NSFileManager.defaultManager moveItemAtURL:partial toURL:file error:nil];
+}
+
+NSString *SGLyricsClipLook(NSURL *motion, SGLyricsClipStyle style) {
+    if (!motion) return [NSString stringWithFormat:@"%ld", (long)style];
+    NSString *name = motion.lastPathComponent.stringByDeletingPathExtension;
+    return [NSString stringWithFormat:@"m%@s%ld", name.length > 16 ? [name substringToIndex:16] : name, (long)style];
 }

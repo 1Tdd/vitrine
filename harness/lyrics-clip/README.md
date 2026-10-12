@@ -18,7 +18,10 @@ Apple Music cover's), and over any videos given: a line with the one before and 
 stretch round the video's end, one longer than the video (written whole), a break and no words. Each is
 read back and checked: length, the 3:4 cut's size, H.264, frames at up to 30 fps, words in the middle and
 nothing white under the clock or the controls, the picture moving, and the preview the same as the first
-frame. It prints each clip's time a frame against the video cut alone (`SGMotionClipShape`) and the
+frame. A video whose frames decode at another size than it states (non-square pixels, made with ffmpeg's
+`setsar=4/3`) must not be written and give no preview, so the line falls back to the cover; so must a video
+that is gone or cut short. It also checks the artwork ID's ending (`SGLyricsClipLook`): another style or
+another video gives another one. It prints each clip's time a frame against the video cut alone (`SGMotionClipShape`) and the
 Animated lyrics clip, the contrast of the words with the brightest of the picture behind them, and the
 memory used.
 

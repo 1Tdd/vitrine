@@ -19,6 +19,10 @@ typedef NS_ENUM(NSInteger, SGLockArtwork) {
 };
 // Off below iOS 26, which has no animated artwork on the lock screen.
 SGLockArtwork SGLockScreenArtwork(void);
+// Under Moving artwork with lyrics, LyricsArtwork.x says whether the playing track has no synced lines (YES), so
+// LockScreenMotion.x shows its moving artwork plain, as Moving artwork does, or has them (NO), so it takes it off
+// for the lyrics' clips. Main queue.
+void SGLockMotionShowPlain(BOOL plain);
 static inline BOOL SGLockArtworkShowsLyrics(SGLockArtwork artwork) {
     return artwork == SGLockArtworkLyrics || artwork == SGLockArtworkMotionLyrics;
 }

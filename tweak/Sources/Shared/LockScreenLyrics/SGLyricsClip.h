@@ -26,5 +26,9 @@ BOOL SGLyricsClipWrite(NSURL *file, CGImageRef backdrop, NSString *line, NSStrin
 // one that does not read. Blocks, so never on the main queue.
 BOOL SGLyricsClipWriteOverMotion(NSURL *file, NSURL *motion, NSString *previous, NSString *line, NSString *next,
                                  double from, double seconds);
+// The end of a line's artwork ID, so a clip kept under it is the one wanted: the style, which a clip falling
+// back to the cover is drawn in, and with moving artwork m and the first 16 characters of its file's name (the
+// store names files by a SHA-1 of their address), so another video for the track redraws the line showing.
+NSString *SGLyricsClipLook(NSURL *motion, SGLyricsClipStyle style);
 // That clip's first frame, for the preview image, NULL where the clip would not be written.
 CGImageRef SGLyricsClipMotionFrame(NSURL *motion, NSString *previous, NSString *line, NSString *next, double from) CF_RETURNS_RETAINED;

@@ -160,10 +160,15 @@ Shared:
                   rows behind the words are blurred (Accelerate's tent blur) and faded in, every row of the cut is
                   darkened in one pass (0.25, and 0.6 across the words), and the words with a tight dark shadow are
                   drawn on; the encoder cuts the 3:4 middle as SGMotionClip.m does, so nothing is scaled on the CPU.
-                  The IDs end in m and a tag of the file, so the clip arriving, or a Canvas after an animated cover,
-                  re-offers the line showing. Until it comes, and for a track
-                  with no moving artwork or one that will not read (a turned video), the lines are drawn as Lyrics
-                  draws them, in the chosen style. Rendered on the Mac against harness/lyrics-clip/ (`motion`, over a
+                  The IDs end in the style and, over moving artwork, m and the first 16 characters of the file's name
+                  (SGLyricsClipLook), so the clip arriving, a Canvas after an animated cover, or a change of style
+                  re-offers the line showing. Until it comes, and for a track with no moving artwork, the lines are drawn
+                  as Lyrics draws them, in the chosen style; so are they over a video that will not draw (turned, its
+                  frames another size than it states, as a video with non-square pixels has, cut short or gone from the
+                  store), which is remembered for the launch and tried again only when handed over again. A track with
+                  no synced lines, or whose lines are not in yet, shows its moving artwork plain, as Moving artwork does:
+                  LyricsArtwork.x says so (SGLockMotionShowPlain) and LockScreenMotion.x shows it and takes it off for
+                  the lyrics' clips. Rendered on the Mac against harness/lyrics-clip/ (`motion`, over a
                   bright busy, a dark and any given videos). What reaches the
                   system's now playing through this hook and Player/NowPlayingExtras.x is checked by harness/now-playing/
     AnimatedArtwork/ moving artwork (AnimatedArtwork.h): the track's Canvas, else Apple Music's animated album cover

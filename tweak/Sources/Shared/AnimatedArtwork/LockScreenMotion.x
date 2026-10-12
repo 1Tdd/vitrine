@@ -103,6 +103,24 @@ static void show(NSURL *file) {
     });
 }
 
+// Under Moving artwork with lyrics: the clip found for the track, and whether LyricsArtwork.x asked for it
+// plain (the track has no synced lines) and it shows so.
+static NSURL *sg_lyricsFile;
+static BOOL sg_plain, sg_plainShown;
+
+void SGLockMotionShowPlain(BOOL plain) {
+    if (@available(iOS 26.0, *)) {
+        sg_plain = plain;
+        BOOL want = plain && sg_choice == SGLockArtworkMotionLyrics && sg_lyricsFile;
+        if (want == sg_plainShown) return;
+        sg_plainShown = want;
+        if (want) show(sg_lyricsFile);
+        else SGNowPlayingSetExtras(@"motion", nil, nil);
+        SGLog(@"lock motion: %@", want ? [NSString stringWithFormat:@"%@ shown plain, the track has no synced lines", sg_lyricsFile.lastPathComponent]
+                                       : @"the plain clip taken off for the lyrics");
+    }
+}
+
 // The cover Spotify handed the system for `title`, read on the main thread as LyricsArtwork.x reads it,
 // then `then` on sg_queue with it, or with NULL when the info is another song's or has none.
 static void withCover(NSString *title, void (^then)(CGImageRef cover)) {
@@ -160,6 +178,8 @@ static void showCover(NSString *picture) {
         sg_follower = [[SGMotionFollower alloc] initWithBegin:^BOOL(NSString *uri, SPTPlayerState *state) {
             sg_walk++;
             SGNowPlayingSetExtras(@"motion", nil, nil);
+            sg_lyricsFile = nil;
+            sg_plainShown = NO;
             NSDictionary *metadata = [state.track.metadata isKindOfClass:NSDictionary.class] ? state.track.metadata : nil;
             sg_title = state.track.trackTitle;
             sg_picture = pictureOf(state.track, metadata);
@@ -169,6 +189,9 @@ static void showCover(NSString *picture) {
             // Under the lyrics instead, and never as this file's extra too: both would fill the same 3:4 key.
             if (sg_choice == SGLockArtworkMotionLyrics) {
                 if (file) SGLyricsArtworkSetMotion(uri, file);
+                // A track with no synced lines shows it plain, as Moving artwork would; LyricsArtwork.x says which.
+                sg_lyricsFile = file;
+                SGLockMotionShowPlain(sg_plain);
                 SGLog(@"lock motion: %@ for the lyrics of %@", file ? file.lastPathComponent : @"no clip", uri);
             } else if (file) show(file);
             else if (sg_choice == SGLockArtworkEverySong) showCover(sg_picture);

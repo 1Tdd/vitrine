@@ -250,6 +250,36 @@ int motionMain(NSURL *out, int argc, char **argv) {
     NSMutableArray<NSURL *> *videos = [NSMutableArray array];
     NSURL *flag = [out URLByAppendingPathComponent:@"source-flag.mp4"], *dark = [out URLByAppendingPathComponent:@"source-dark.mp4"];
     check(makeVideo(flag, 720, 1280, 30, 6, drawFlag), @"made the bright stand-in, 720x1280, 30 fps, 6 s");
+
+    // The end of the artwork ID (LyricsArtwork.x): a style change or another video gives another ID, so no clip is
+    // kept past either; two store names that share their first four characters still differ.
+    printf("artwork IDs\n");
+    NSURL *a = [NSURL fileURLWithPath:@"/c/Motion/3f9a0c11d2e4b5a6978877665544332211009988.mp4"];
+    NSURL *b = [NSURL fileURLWithPath:@"/c/Motion/3f9a77aa00bb11cc22dd33ee44ff556677889900.mp4"];
+    check(![SGLyricsClipLook(a, SGLyricsClipStill) isEqual:SGLyricsClipLook(a, SGLyricsClipAnimated)],
+          [NSString stringWithFormat:@"the style is in it over moving artwork (%@, %@)", SGLyricsClipLook(a, SGLyricsClipStill),
+           SGLyricsClipLook(a, SGLyricsClipAnimated)]);
+    check(![SGLyricsClipLook(a, SGLyricsClipStill) isEqual:SGLyricsClipLook(b, SGLyricsClipStill)], @"another video gives another one");
+    check([SGLyricsClipLook(a, SGLyricsClipStill) isEqual:SGLyricsClipLook([a copy], SGLyricsClipStill)], @"the same video and style give the same one");
+    check(![SGLyricsClipLook(nil, SGLyricsClipStill) isEqual:SGLyricsClipLook(a, SGLyricsClipStill)]
+          && ![SGLyricsClipLook(nil, SGLyricsClipStill) isEqual:SGLyricsClipLook(nil, SGLyricsClipAnimated)], @"over the cover, the style alone");
+
+    // A video gone from the store or cut short fails at once, with no preview, for LyricsArtwork.x to remember.
+    printf("videos that will not read\n");
+    NSURL *gone = [out URLByAppendingPathComponent:@"gone.mp4"], *cutShort = [out URLByAppendingPathComponent:@"cut-short.mp4"];
+    [NSFileManager.defaultManager removeItemAtURL:gone error:nil];
+    NSData *whole = [NSData dataWithContentsOfURL:flag];
+    [[whole subdataWithRange:NSMakeRange(0, whole.length / 3)] writeToURL:cutShort atomically:YES];
+    for (NSURL *bad in @[gone, cutShort]) {
+        NSURL *clip = [out URLByAppendingPathComponent:[@"from-" stringByAppendingString:bad.lastPathComponent]];
+        CFAbsoluteTime started = CFAbsoluteTimeGetCurrent();
+        BOOL written = SGLyricsClipWriteOverMotion(clip, bad, nil, @"A line", @"the next", 1, 3);
+        double ms = (CFAbsoluteTimeGetCurrent() - started) * 1000;
+        CGImageRef preview = SGLyricsClipMotionFrame(bad, nil, @"A line", @"the next", 1);
+        check(!written && !preview && ![NSFileManager.defaultManager fileExistsAtPath:clip.path],
+              [NSString stringWithFormat:@"%@: not written (in %.0f ms) and no preview", bad.lastPathComponent, ms]);
+        CGImageRelease(preview);
+    }
     check(makeVideo(dark, 904, 1206, 24, 8, drawDark), @"made the dark stand-in, 904x1206, 24 fps, 8 s");
     [videos addObjectsFromArray:@[flag, dark]];
     for (int i = 0; i < argc; i++) [videos addObject:[NSURL fileURLWithPath:[NSString stringWithUTF8String:argv[i]]]];
@@ -279,6 +309,26 @@ int motionMain(NSURL *out, int argc, char **argv) {
         CGSize cut = SGMotionClipCut(track.naturalSize, 0.75);
         printf("\n%s: %.0fx%.0f, %.2f s at %.0f fps, cut to %.0fx%.0f\n", name.UTF8String, track.naturalSize.width, track.naturalSize.height,
                length, fps, cut.width, cut.height);
+        // drawOver refuses a decoded frame of another size than the track states, and the clip is then not written,
+        // so LyricsArtwork.x draws the line over the cover. A video with non-square pixels does that: its natural size
+        // is the shown one (960x1280 for 720x1280 at 4:3), its frames the stored one.
+        BOOL matches;
+        {
+            AVAssetReader *reader = [AVAssetReader assetReaderWithAsset:asset error:nil];
+            AVAssetReaderTrackOutput *output = [AVAssetReaderTrackOutput assetReaderTrackOutputWithTrack:track
+                outputSettings:@{(id)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA)}];
+            [reader addOutput:output];
+            [reader startReading];
+            CMSampleBufferRef sample = [output copyNextSampleBuffer];
+            CVPixelBufferRef buffer = sample ? CMSampleBufferGetImageBuffer(sample) : NULL;
+            size_t w = buffer ? CVPixelBufferGetWidth(buffer) : 0, h = buffer ? CVPixelBufferGetHeight(buffer) : 0;
+            matches = w == (size_t)round(track.naturalSize.width) && h == (size_t)round(track.naturalSize.height);
+            printf("  %s\n", [NSString stringWithFormat:@"%@ at its natural size (%.3fx%.3f, frames %zux%zu, %zu bytes a row)",
+                   matches ? @"decodes" : @"does NOT decode", track.naturalSize.width, track.naturalSize.height, w, h,
+                   buffer ? CVPixelBufferGetBytesPerRow(buffer) : 0].UTF8String);
+            if (sample) CFRelease(sample);
+            [reader cancelReading];
+        }
         // The video cut alone, the decode and encode with nothing drawn, to tell the drawing's share.
         start = CFAbsoluteTimeGetCurrent();
         SGMotionClipShape(video, 0.75, [out URLByAppendingPathComponent:[name stringByAppendingString:@"-cut.mp4"]]);
@@ -290,6 +340,13 @@ int motionMain(NSURL *out, int argc, char **argv) {
             NSURL *url = [out URLByAppendingPathComponent:[NSString stringWithFormat:@"%@-%@.mp4", name, c[0]]];
             start = CFAbsoluteTimeGetCurrent();
             BOOL written = SGLyricsClipWriteOverMotion(url, video, c[1], c[2], c[3], from, seconds);
+            if (!matches) {
+                CGImageRef preview = SGLyricsClipMotionFrame(video, c[1], c[2], c[3], from);
+                check(!written && !preview && ![NSFileManager.defaultManager fileExistsAtPath:url.path],
+                      @"not written and no preview, so the line falls back to the cover rather than showing without its words");
+                CGImageRelease(preview);
+                continue;
+            }
             double ms = (CFAbsoluteTimeGetCurrent() - start) * 1000;
             printf("  footprint after writing %.1f MB\n", footprintMB(NO));
             printf(" %s\n", url.lastPathComponent.UTF8String);
