@@ -78,6 +78,11 @@ static void style(UIView *button) {
 - (void)layoutSubviews {
     %orig;
     CFTimeInterval began = SGRHomeProbeBegin();
+    // The button's content (Encore's card, the cover's holder, a tile's row with its playing indicator) is laid out
+    // after the button's own pass otherwise; brought up to date now, the styling reads final frames.
+    if (SGRHomeLook()) {
+        for (UIView *sub in ((UIView *)self).subviews) [sub layoutIfNeeded];
+    }
     style((UIView *)self);
     SGRHomeProbeEnd(SGRHomeProbeCards, began);
 }
@@ -111,22 +116,14 @@ static void relayoutButtonAround(UIView *label) {
 // The hooks the Home look needs (SGRKeyHomeLook): none of them install while it is off.
 %group SGRHomeLook
 
-// The tile's playing indicator is placed by Spotify's row after the tile's own pass; its placing asks for the
-// tile's pass again, so HomeTiles.m moves it to the trailing edge from where Spotify put it.
+// The tile's playing indicator comes and goes with what plays, on its own, without the tile laying out: shown or
+// hidden, the tile's pass is asked for again, and HomeTiles.m moves it to the trailing edge or lets the title have
+// the room back.
 %hook _TtC11Home_ECMKit36ShortcutCardHomePlayingIndicatorView
-- (void)setFrame:(CGRect)frame {
+- (void)setHidden:(BOOL)hidden {
+    BOOL was = ((UIView *)self).hidden;
     %orig;
-    CFTimeInterval began = SGRHomeProbeBegin();
-    relayoutButtonAround((UIView *)self);
-    SGRHomeProbeEnd(SGRHomeProbeFrames, began);
-}
-%end
-
-// A card's cover holder is laid out to the card by Spotify's own Encore.Card pass, after the button's; the large
-// card (HomeTopPicks.x) sizes its cover from that, so the pass is asked for again when the card's inner view is placed.
-%hook _TtCE19Encore_StackViewKitO16EncoreFoundation6Encore15PassthroughView
-- (void)setFrame:(CGRect)frame {
-    %orig;
+    if (was == hidden) return;
     CFTimeInterval began = SGRHomeProbeBegin();
     relayoutButtonAround((UIView *)self);
     SGRHomeProbeEnd(SGRHomeProbeFrames, began);
@@ -155,8 +152,5 @@ static void relayoutButtonAround(UIView *label) {
     ]);
     if (!SGRHomeLook()) return;
     %init(SGRHomeLook);
-    SGRequireClasses(@[
-        @"_TtC11Home_ECMKit36ShortcutCardHomePlayingIndicatorView",
-        @"_TtCE19Encore_StackViewKitO16EncoreFoundation6Encore15PassthroughView",
-    ]);
+    SGRequireClasses(@[@"_TtC11Home_ECMKit36ShortcutCardHomePlayingIndicatorView"]);
 }

@@ -103,7 +103,7 @@ typedef NS_ENUM(NSUInteger, SGRHomeProbe) {
     // The hooks of the Home look (HomeCards.x, HomeTopPicks.x, HomeTiles.m).
     SGRHomeProbeLabels,          // UILabel setText:/setAttributedText: hook, every call
     SGRHomeProbeLabelsMatched,   // ... the ones under a Home card or tile, which mark the button
-    SGRHomeProbeFrames,          // the playing indicator's and PassthroughView's setFrame: hooks
+    SGRHomeProbeFrames,          // the playing indicator's setHidden: hook (a tile's pass asked for again)
     SGRHomeProbeListAttrs,       // the page list's layoutAttributesForElementsInRect:/ForItem: hooks
     SGRHomeProbeShelfLayout,     // the shelf's layoutSubviews hook (TouchCancellingCollectionView)
     SGRHomeProbeLargeCard,       // SGRHomeStyleLargeCard

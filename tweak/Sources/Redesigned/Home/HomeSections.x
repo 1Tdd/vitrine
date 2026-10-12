@@ -192,7 +192,20 @@ void SGRHomeMeasureAgain(UIView *view) {
         if ([v isKindOfClass:UICollectionViewCell.class]) cell = v;
     }
     if (!cell || !isSection(((UICollectionViewCell *)cell).contentView)) return;
-    dispatch_async(dispatch_get_main_queue(), ^{ [cell invalidateIntrinsicContentSize]; });
+    // The list asks a self-sizing cell for its size again once the cell's item is invalidated in the layout and the
+    // cell lays out; the cell's intrinsic size alone was not enough for a cell already sized.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIView *v = cell.superview;
+        while (v && ![v isKindOfClass:UICollectionView.class]) v = v.superview;
+        UICollectionView *list = (UICollectionView *)v;
+        NSIndexPath *path = list ? [list indexPathForCell:(UICollectionViewCell *)cell] : nil;
+        [cell invalidateIntrinsicContentSize];
+        [cell setNeedsLayout];
+        if (!path) return;
+        UICollectionViewLayoutInvalidationContext *context = [[[list.collectionViewLayout class] invalidationContextClass] new];
+        [context invalidateItemsAtIndexPaths:@[path]];
+        [list.collectionViewLayout invalidateLayoutWithContext:context];
+    });
 }
 
 // A dropped section's cell is 0 tall, but what it holds keeps the height it measured at, hidden and cut off

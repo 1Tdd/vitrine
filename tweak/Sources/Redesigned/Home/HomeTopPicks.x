@@ -58,6 +58,36 @@ static CGFloat targetWidth(void) {
     return round(sg_containerWidth * kCardShare);
 }
 
+// The large shelf's heading goes, and the band it took with it. Its section's header is a boundary item (kind
+// UICollectionElementKindSectionHeader, 39pt tall over the cards on 9.1.90, extending the section); it is made
+// again not extending the section, so it takes no room and lies over the cards' top instead, where it stays in the
+// shelf's visible rect, and so alive with the Show all the header's menu offers, transparent and without touches
+// (the shelf's layout pass). The section's top inset goes the same way. What they took together is the band the
+// shelf's cell loses (kOffsetKey, read as the cell is measured).
+static void headingAside(NSCollectionLayoutSection *made, UICollectionViewLayout *layout) {
+    NSMutableArray<NSCollectionLayoutBoundarySupplementaryItem *> *items = [NSMutableArray array];
+    CGFloat band = made.contentInsets.top;
+    for (NSCollectionLayoutBoundarySupplementaryItem *item in made.boundarySupplementaryItems) {
+        if (![item.elementKind isEqualToString:UICollectionElementKindSectionHeader] || !item.extendsBoundary) {
+            [items addObject:item];
+            continue;
+        }
+        NSCollectionLayoutBoundarySupplementaryItem *aside = [NSCollectionLayoutBoundarySupplementaryItem boundarySupplementaryItemWithLayoutSize:item.layoutSize
+                                                                                                                                      elementKind:item.elementKind
+                                                                                                                                        alignment:item.alignment];
+        aside.extendsBoundary = NO;
+        aside.pinToVisibleBounds = item.pinToVisibleBounds;
+        aside.zIndex = item.zIndex;
+        [items addObject:aside];
+        if (item.layoutSize.heightDimension.isAbsolute || item.layoutSize.heightDimension.isEstimated) band += item.layoutSize.heightDimension.dimension;
+    }
+    made.boundarySupplementaryItems = items;
+    NSDirectionalEdgeInsets insets = made.contentInsets;
+    insets.top = 0;
+    made.contentInsets = insets;
+    if (layout) objc_setAssociatedObject(layout, &kOffsetKey, band > 0 ? @(band) : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
 static UICollectionViewCompositionalLayoutSectionProvider wrapped(UICollectionViewCompositionalLayoutSectionProvider provider, SGRLayoutBox *box) {
     return ^NSCollectionLayoutSection *(NSInteger section, id<NSCollectionLayoutEnvironment> environment) {
         UICollectionViewCompositionalLayout *layout = box.layout;
@@ -67,6 +97,7 @@ static UICollectionViewCompositionalLayoutSectionProvider wrapped(UICollectionVi
         sg_containerWidth = environment.container.effectiveContentSize.width;
         sg_cardWidth = sg_cardGrow = 0;
         NSCollectionLayoutSection *made = provider(section, environment);
+        if (sg_enlarging && made) headingAside(made, layout);
         if (layout && sg_cardGrow > 0) objc_setAssociatedObject(layout, &kGrowKey, @(sg_cardGrow), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         sg_enlarging = was;
         sg_cardWidth = wasWidth;
@@ -92,14 +123,42 @@ static UICollectionViewCompositionalLayout *boxed(UICollectionViewCompositionalL
 static _Thread_local BOOL sg_unmoved;   // reading the layout's own frames, not the moved ones
 
 // The grid's and the shelf's frames as the layout has them, and where the sections before the shelf end (the
-// grid's bottom, or a kept shelf's when Cards from names a later one); NO while there is no swap to make.
+// grid's bottom, or a kept shelf's when Cards from names a later one), worked out once per layout pass (the
+// cache goes as the layout prepares again); NO while there is no swap to make. The sections and items asked for
+// are checked against what the list has now: the feed can have changed under the indexes the measuring left.
+static void topLost(UICollectionView *list);
+static __weak UICollectionViewLayout *sg_blocksLayout;
+static BOOL sg_blocksKnown, sg_blocksSwap;
+static CGRect sg_blocksGrid, sg_blocksShelf;
+static CGFloat sg_blocksBefore;
+
 static BOOL blocks(UICollectionViewLayout *layout, CGRect *grid, CGRect *shelf, CGFloat *before) {
-    NSInteger shelfSection = sg_topIndex == NSIntegerMax ? NSNotFound : sg_topIndex / 10000;
-    if (sg_gridSection == NSNotFound || shelfSection == NSNotFound || sg_gridSection >= shelfSection) return NO;
     if (!objc_getAssociatedObject(layout, &kListKey)) return NO;
+    if (sg_blocksKnown && sg_blocksLayout == layout) {
+        *grid = sg_blocksGrid;
+        *shelf = sg_blocksShelf;
+        *before = sg_blocksBefore;
+        return sg_blocksSwap;
+    }
+    sg_blocksLayout = layout;
+    sg_blocksKnown = YES;
+    sg_blocksSwap = NO;
+    NSInteger shelfSection = sg_topIndex == NSIntegerMax ? NSNotFound : sg_topIndex / 10000, shelfItem = sg_topIndex % 10000;
+    if (sg_gridSection == NSNotFound || shelfSection == NSNotFound || sg_gridSection >= shelfSection) return NO;
+    UICollectionView *list = layout.collectionView;
+    NSInteger sections = list.numberOfSections;
+    if (sg_gridSection >= sections || [list numberOfItemsInSection:sg_gridSection] < 1) {
+        sg_gridSection = NSNotFound;
+        return NO;
+    }
+    if (shelfSection >= sections || shelfItem >= [list numberOfItemsInSection:shelfSection]) {
+        // The feed changed under the index (a filter, a reload): the shelves on screen are measured again for a new top.
+        topLost(list);
+        return NO;
+    }
     sg_unmoved = YES;
     UICollectionViewLayoutAttributes *a = [layout layoutAttributesForItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:sg_gridSection]];
-    UICollectionViewLayoutAttributes *b = [layout layoutAttributesForItemAtIndexPath:[NSIndexPath indexPathForItem:sg_topIndex % 10000 inSection:shelfSection]];
+    UICollectionViewLayoutAttributes *b = [layout layoutAttributesForItemAtIndexPath:[NSIndexPath indexPathForItem:shelfItem inSection:shelfSection]];
     CGFloat last = CGRectGetMaxY(a.frame);
     if (a && b) {
         for (UICollectionViewLayoutAttributes *between in [layout layoutAttributesForElementsInRect:CGRectUnion(a.frame, b.frame)]) {
@@ -109,41 +168,23 @@ static BOOL blocks(UICollectionViewLayout *layout, CGRect *grid, CGRect *shelf, 
     }
     sg_unmoved = NO;
     if (!a || !b || last > CGRectGetMinY(b.frame)) return NO;
-    *grid = a.frame;
-    *shelf = b.frame;
-    *before = last;
+    *grid = sg_blocksGrid = a.frame;
+    *shelf = sg_blocksShelf = b.frame;
+    *before = sg_blocksBefore = last;
+    sg_blocksSwap = YES;
     return YES;
 }
 
-// The shelf's block takes the grid's place; the grid and everything between it and the shelf move down by the
-// shelf's block, the gap above the shelf (its section inset) kept between the two.
+// The shelf's block takes the grid's place, kBandAbove higher (the reference's cards start 2pt above the feed's
+// top); the grid and everything between it and the shelf move down by the shelf's block, the gap above the shelf
+// (its section inset) kept between the two.
 static void move(UICollectionViewLayoutAttributes *attributes, CGRect grid, CGRect shelf, CGFloat before) {
     NSInteger section = attributes.indexPath.section, shelfSection = sg_topIndex / 10000;
     CGRect frame = attributes.frame;
-    if (section >= sg_gridSection && section < shelfSection) frame.origin.y += CGRectGetMaxY(shelf) - before;
-    else if (section == shelfSection) frame.origin.y += CGRectGetMinY(grid) - CGRectGetMinY(shelf);
+    if (section >= sg_gridSection && section < shelfSection) frame.origin.y += CGRectGetMaxY(shelf) - before + kBandAbove;
+    else if (section == shelfSection) frame.origin.y += CGRectGetMinY(grid) - CGRectGetMinY(shelf) + kBandAbove;
     else return;
     attributes.frame = frame;
-}
-
-// The large shelf's heading, scrolled out of its bounds, would be recycled by the shelf, and with it the Show all
-// the header's menu offers: its attributes stay in what the layout answers, so the shelf keeps the view (clipped,
-// and transparent). Which supplementary it is, the layout said itself while the heading was in view.
-static char kHeadingKindKey, kHeadingPathKey;
-static NSArray<UICollectionViewLayoutAttributes *> *keptHeading(UICollectionViewLayout *layout, NSArray<UICollectionViewLayoutAttributes *> *made) {
-    NSString *kind = objc_getAssociatedObject(layout, &kHeadingKindKey);
-    NSIndexPath *path = objc_getAssociatedObject(layout, &kHeadingPathKey);
-    for (UICollectionViewLayoutAttributes *attributes in made) {
-        if (attributes.representedElementCategory != UICollectionElementCategorySupplementaryView) continue;
-        if (!kind) {
-            objc_setAssociatedObject(layout, &kHeadingKindKey, attributes.representedElementKind, OBJC_ASSOCIATION_COPY_NONATOMIC);
-            objc_setAssociatedObject(layout, &kHeadingPathKey, attributes.indexPath, OBJC_ASSOCIATION_COPY_NONATOMIC);
-        }
-        return made;
-    }
-    if (!kind || !path) return made;
-    UICollectionViewLayoutAttributes *heading = [layout layoutAttributesForSupplementaryViewOfKind:kind atIndexPath:path];
-    return heading ? [made arrayByAddingObject:heading] : made;
 }
 
 %hook UICollectionViewCompositionalLayout
@@ -158,17 +199,23 @@ static NSArray<UICollectionViewLayoutAttributes *> *keptHeading(UICollectionView
     SGRLayoutBox *box = [SGRLayoutBox new];
     return boxed(%orig(wrapped(provider, box)), box);
 }
+- (void)prepareLayout {
+    %orig;
+    if (sg_blocksLayout == (UICollectionViewLayout *)self) sg_blocksKnown = NO;
+}
+
 - (NSArray<UICollectionViewLayoutAttributes *> *)layoutAttributesForElementsInRect:(CGRect)rect {
+    if (sg_unmoved) return %orig;
+    CFTimeInterval began = SGRHomeProbeBegin();
     CGRect grid, shelf;
     CGFloat before;
-    if (objc_getAssociatedObject(self, &kLargeKey)) {
-        NSArray<UICollectionViewLayoutAttributes *> *made = %orig;
-        return keptHeading((UICollectionViewLayout *)self, made);
-    }
-    if (sg_unmoved || !blocks((UICollectionViewLayout *)self, &grid, &shelf, &before)) return %orig;
+    BOOL swap = blocks((UICollectionViewLayout *)self, &grid, &shelf, &before);
     // Everything between the two blocks moves within their band, so the band is asked for whole.
-    CGRect band = CGRectUnion(grid, shelf);
-    if (!CGRectIntersectsRect(rect, band)) return %orig;
+    CGRect band = swap ? CGRectUnion(grid, shelf) : CGRectZero;
+    if (!swap || !CGRectIntersectsRect(rect, band)) {
+        SGRHomeProbeEnd(SGRHomeProbeListAttrs, began);
+        return %orig;
+    }
     NSMutableArray<UICollectionViewLayoutAttributes *> *moved = [NSMutableArray array];
     CGRect whole = CGRectUnion(rect, band);
     NSArray<UICollectionViewLayoutAttributes *> *all = %orig(whole);
@@ -177,17 +224,22 @@ static NSArray<UICollectionViewLayoutAttributes *> *keptHeading(UICollectionView
         move(copy, grid, shelf, before);
         if (CGRectIntersectsRect(copy.frame, rect)) [moved addObject:copy];
     }
+    SGRHomeProbeEnd(SGRHomeProbeListAttrs, began);
     return moved;
 }
 
 - (UICollectionViewLayoutAttributes *)layoutAttributesForItemAtIndexPath:(NSIndexPath *)indexPath {
     UICollectionViewLayoutAttributes *attributes = %orig;
+    if (sg_unmoved || !attributes) return attributes;
+    CFTimeInterval began = SGRHomeProbeBegin();
     CGRect grid, shelf;
     CGFloat before;
-    if (sg_unmoved || !attributes || !blocks((UICollectionViewLayout *)self, &grid, &shelf, &before)) return attributes;
-    UICollectionViewLayoutAttributes *copy = [attributes copy];
-    move(copy, grid, shelf, before);
-    return copy;
+    if (blocks((UICollectionViewLayout *)self, &grid, &shelf, &before)) {
+        attributes = [attributes copy];
+        move(attributes, grid, shelf, before);
+    }
+    SGRHomeProbeEnd(SGRHomeProbeListAttrs, began);
+    return attributes;
 }
 %end
 
@@ -210,6 +262,20 @@ static NSArray<UICollectionViewLayoutAttributes *> *keptHeading(UICollectionView
 }
 %end
 
+// The top shelf is no longer one (hidden, not the one Cards from names, or gone with the feed): the page's color goes,
+// and every shelf on screen is measured again, so the next one takes the place now rather than on the next scroll.
+static void topLost(UICollectionView *list) {
+    sg_topIndex = NSIntegerMax;
+    sg_largeShelf = nil;
+    SGRHomeSetPageTint(nil);
+    static Class shelf;
+    if (!shelf) shelf = NSClassFromString(@"_TtC16Home_CarouselKit29TouchCancellingCollectionView");
+    for (UICollectionViewCell *cell in list.visibleCells) {
+        UIView *root = cell.contentView.subviews.firstObject.subviews.firstObject;
+        if (shelf && [root isKindOfClass:shelf]) SGRHomeMeasureAgain(root);
+    }
+}
+
 %hook _TtC12Element_List18CollectionViewCell
 - (UICollectionViewLayoutAttributes *)preferredLayoutAttributesFittingAttributes:(UICollectionViewLayoutAttributes *)attributes {
     UICollectionViewLayoutAttributes *result = %orig;
@@ -225,7 +291,7 @@ static NSArray<UICollectionViewLayoutAttributes *> *keptHeading(UICollectionView
     if (list) objc_setAssociatedObject(((UICollectionView *)list).collectionViewLayout, &kListKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     if (!shelf || ![root isKindOfClass:shelf] || result.size.height <= kHeading) {
         // The top's place holds something else now (the feed came again): the next shelf measured takes it.
-        if (index == sg_topIndex) sg_topIndex = NSIntegerMax;
+        if (index == sg_topIndex) topLost((UICollectionView *)list);
         // The shortcuts grid is the one bare list Home has (HomeSections.x); a section of anything else in its place
         // (no shortcuts) leaves the order alone.
         BOOL grid = [root isKindOfClass:UICollectionView.class] && !root.accessibilityIdentifier.length && result.size.height > 0;
@@ -238,13 +304,14 @@ static NSArray<UICollectionViewLayoutAttributes *> *keptHeading(UICollectionView
     NSString *identity = SGRHomeShelfIdentity(root), *from = SGRHomeTopPicksFrom();
     BOOL candidate = !SGRHomeShelfHidden(identity) && (!from || [identity isEqualToString:from]);
     if (candidate && index < sg_topIndex) sg_topIndex = index;
-    else if (!candidate && index == sg_topIndex) sg_topIndex = NSIntegerMax;
+    else if (!candidate && index == sg_topIndex) topLost((UICollectionView *)list);
     BOOL large = index == sg_topIndex, was = objc_getAssociatedObject(layout, &kLargeKey) != nil;
     if (large) sg_largeShelf = (UICollectionView *)root;
     // The shelf's height as Spotify sizes it, from a measuring before it was large.
     if (!was) objc_setAssociatedObject(layout, &kNaturalKey, @(result.size.height), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     if (large != was) {
         objc_setAssociatedObject(layout, &kLargeKey, large ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if (!large) SGRHomeSetPageTint(nil);
         [layout invalidateLayout];
         // The shelf laid its cells out at Spotify's sizes before the mark changed (reading its heading lays it out), and
         // a cell the new layout puts off screen kept its old frame on screen: the cells are made again from the new
@@ -266,14 +333,9 @@ static NSArray<UICollectionViewLayoutAttributes *> *keptHeading(UICollectionView
         objc_setAssociatedObject(layout, &kNaturalKey, natural, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     NSNumber *grow = objc_getAssociatedObject(layout, &kGrowKey);
-    // The large shelf's heading goes (HomeHeadings.x), and so does the band it took: the shelf is scrolled past it
-    // (keptAbove below), and its cell is that much shorter, so the cards sit kBandAbove under the page's title.
-    CGFloat offset = 0;
-    if (large) {
-        CGRect first = [layout layoutAttributesForItemAtIndexPath:[NSIndexPath indexPathForItem:0 inSection:0]].frame;
-        offset = MAX(0, CGRectGetMinY(first) - kBandAbove);
-    }
-    objc_setAssociatedObject(layout, &kOffsetKey, offset > 0 ? @(offset) : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    // The band the heading and the section's top inset took, which the large shelf no longer has (headingAside): its
+    // cell is that much shorter.
+    CGFloat offset = large ? [objc_getAssociatedObject(layout, &kOffsetKey) doubleValue] : 0;
     // Never shorter than what the shelf lays out: Spotify's height can be taken before its tallest card sized
     // itself (a title on 4 lines), and the shelf then scrolls inside its cell. The shelf's height comes from its
     // cards, not from the cell, so taking it does not feed back.
@@ -284,28 +346,27 @@ static NSArray<UICollectionViewLayoutAttributes *> *keptHeading(UICollectionView
 }
 %end
 
-static CGFloat keptAbove(UICollectionView *shelf) {
-    return [objc_getAssociatedObject(shelf.collectionViewLayout, &kOffsetKey) doubleValue];
-}
-
 %hook _TtC16Home_CarouselKit29TouchCancellingCollectionView
 // The large shelf's cards sized themselves after its cell was measured and no longer fit: measure the cell again.
 - (void)setContentSize:(CGSize)size {
     %orig;
     UICollectionView *shelf = (UICollectionView *)self;
     UICollectionViewLayout *layout = shelf.collectionViewLayout;
-    if (!objc_getAssociatedObject(layout, &kLargeKey) || size.height - keptAbove(shelf) <= shelf.bounds.size.height + 0.5) return;
+    if (!objc_getAssociatedObject(layout, &kLargeKey) || size.height <= shelf.bounds.size.height + 0.5) return;
     NSNumber *asked = objc_getAssociatedObject(layout, &kAskedKey);
     if (asked && asked.doubleValue == size.height) return;
     objc_setAssociatedObject(layout, &kAskedKey, @(size.height), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     SGRHomeMeasureAgain(shelf);
 }
 
-// VoiceOver reads a list's cells in their index order, which the swap no longer draws: the page's list reads
-// them in the order they are on screen.
+// VoiceOver reads a list's cells in their index order, which the swap no longer draws: while the swap is in
+// effect, the page's list reads the cells on screen in the order they are on screen (the list's own answer is its
+// cells on screen too; reaching the rest is UIScrollView's accessibilityScroll:, which this leaves alone).
 - (NSArray *)accessibilityElements {
     UICollectionView *list = (UICollectionView *)self;
-    if (!objc_getAssociatedObject(list.collectionViewLayout, &kListKey) || sg_gridSection == NSNotFound) return %orig;
+    CGRect grid, shelf;
+    CGFloat before;
+    if (!blocks(list.collectionViewLayout, &grid, &shelf, &before)) return %orig;
     NSArray<UICollectionViewCell *> *cells = [list.visibleCells sortedArrayUsingComparator:^NSComparisonResult(UIView *a, UIView *b) {
         return a.frame.origin.y < b.frame.origin.y ? NSOrderedAscending : a.frame.origin.y > b.frame.origin.y ? NSOrderedDescending : NSOrderedSame;
     }];
@@ -316,37 +377,24 @@ static CGFloat keptAbove(UICollectionView *shelf) {
     return elements;
 }
 
-// The large shelf stays scrolled past its heading, and cannot be dragged back down to it: its own vertical pan
-// goes, the cards' sideways one being the orthogonal scroll view's. A shelf no longer large gets the pan back.
+// The large shelf's heading lies over its cards' top (headingAside), transparent and without touches; a shelf no
+// longer large gets it back. Set here, on the shelf's own pass, since the heading's button lays out before the
+// shelf is marked and not after.
 - (void)layoutSubviews {
     %orig;
     CFTimeInterval began = SGRHomeProbeBegin();
     UICollectionView *shelf = (UICollectionView *)self;
-    CGFloat above = keptAbove(shelf);
+    BOOL large = objc_getAssociatedObject(shelf.collectionViewLayout, &kLargeKey) != nil;
     BOOL held = objc_getAssociatedObject(shelf, &kHeldKey) != nil;
     // Every shelf and the page's list are this class: only the large one, or one that was, has work here.
-    if (above <= 0 && !held) {
-        SGRHomeProbeEnd(SGRHomeProbeShelfLayout, began);
-        return;
-    }
-    // The heading goes with the band (its point still in view would show a sliver), and comes back with it. Set
-    // here, on the shelf's own pass, since the heading's button lays out before the shelf is marked and not after.
-    UIView *heading = SGRFindByIdentifier(shelf, @"Components.UI.SectionHeadingHome", &kHeadingKey);
-    if (heading && heading.alpha != (above > 0 ? 0 : 1)) {
-        heading.alpha = above > 0 ? 0 : 1;
-        heading.userInteractionEnabled = above <= 0;
-        heading.accessibilityElementsHidden = above > 0;
-    }
-    if (above > 0) {
-        if (shelf.contentOffset.y != above) shelf.contentOffset = CGPointMake(shelf.contentOffset.x, above);
-        if (shelf.scrollEnabled) shelf.scrollEnabled = NO;
-        // The heading scrolled past the top would draw over the page's title otherwise: Spotify's shelf does not clip.
-        if (!shelf.clipsToBounds) shelf.clipsToBounds = YES;
-        if (!held) objc_setAssociatedObject(shelf, &kHeldKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    } else if (held) {
-        objc_setAssociatedObject(shelf, &kHeldKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        shelf.scrollEnabled = YES;
-        shelf.clipsToBounds = NO;
+    if (large || held) {
+        UIView *heading = SGRFindByIdentifier(shelf, @"Components.UI.SectionHeadingHome", &kHeadingKey);
+        if (heading && heading.alpha != (large ? 0 : 1)) {
+            heading.alpha = large ? 0 : 1;
+            heading.userInteractionEnabled = !large;
+            heading.accessibilityElementsHidden = large;
+        }
+        if (held != large) objc_setAssociatedObject(shelf, &kHeldKey, large ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     SGRHomeProbeEnd(SGRHomeProbeShelfLayout, began);
 }
