@@ -11,12 +11,14 @@
 //
 // The choice is read on every track, and a change applies at once: Off takes the clip away, Moving artwork
 // and Every song look the playing track up. Lyrics is LyricsArtwork.x's, which reads it the same way, so the
-// lock screen widget's star (LockScreenStar.x) can swap the two without a restart.
+// lock screen widget's star (LockScreenStar.x) can swap the two without a restart. Moving artwork with
+// lyrics looks the track up too and hands its clip to LyricsArtwork.x, which draws the lines over it.
 #import <MediaPlayer/MediaPlayer.h>
 #import "Core/SGCore.h"
 #import "AnimatedArtwork.h"
 #import "SGFluidClip.h"
 #import "SGMotionClip.h"
+#import "Shared/LockScreenLyrics/LockScreenLyrics.h"
 #import "Shared/LockScreenLyrics/SGLyricsClip.h"
 #import "Shared/Player/NowPlayingExtras.h"
 #import "Shared/Player/PlayerState.h"
@@ -31,8 +33,9 @@ static SGLockArtwork sg_choice;
 static dispatch_queue_t sg_queue;   // cuts clips and makes the cover's, one at a time
 static SGMotionFollower *sg_follower;
 
+// Moving artwork with lyrics walks the sources too, and hands the clip to LyricsArtwork.x.
 static BOOL motionOn(SGLockArtwork choice) {
-    return choice == SGLockArtworkMotion || choice == SGLockArtworkEverySong;
+    return choice == SGLockArtworkMotion || choice == SGLockArtworkEverySong || choice == SGLockArtworkMotionLyrics;
 }
 
 // The key a clip shown at `shown` goes under, and the shape it is cut to (width over height): 1:1 for a
@@ -163,7 +166,11 @@ static void showCover(NSString *picture) {
             sg_choice = SGLockScreenArtwork();
             return motionOn(sg_choice);
         } found:^(NSString *uri, NSURL *file) {
-            if (file) show(file);
+            // Under the lyrics instead, and never as this file's extra too: both would fill the same 3:4 key.
+            if (sg_choice == SGLockArtworkMotionLyrics) {
+                if (file) SGLyricsArtworkSetMotion(uri, file);
+                SGLog(@"lock motion: %@ for the lyrics of %@", file ? file.lastPathComponent : @"no clip", uri);
+            } else if (file) show(file);
             else if (sg_choice == SGLockArtworkEverySong) showCover(sg_picture);
         }];
         // Heard on the writing thread and handed to main without waiting: a main-queue observer makes every

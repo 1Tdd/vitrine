@@ -150,7 +150,21 @@ Shared:
                   Still (one frame) or Animated (15 fps). The backdrop is blurred small and drawn large, on the CPU as the
                   lock screen asks in the background; previews are drawn on a queue apart from the clips, and while the
                   lock screen is asking, the next line's preview and clip are drawn ahead and a ready preview is handed
-                  over at once. iOS still shows the plain cover for about half a second at each change of artwork. Picking it or another artwork applies at once. Rendered on the Mac against harness/lyrics-clip/. What reaches the
+                  over at once. iOS still shows the plain cover for about half a second at each change of artwork. Picking it or another artwork applies at once.
+                  Moving artwork with lyrics (the choice's fifth value, 4) draws each line over the track's moving
+                  artwork, which LockScreenMotion.x finds and hands over (SGLyricsArtworkSetMotion): the clip is the
+                  stretch of the video the song is at while the line shows (its start taken round the video's length,
+                  from the line's start to the next's plus a second, 2 to 8 s; a video no longer than that is written
+                  whole, turned to start there, so its loop has no seam), at the video's own 3:4 cut and frame rate up
+                  to 30 fps, with the line sung last dimmed above (dim, bright, dim). The video is decoded as BGRA, the
+                  rows behind the words are blurred (Accelerate's tent blur) and faded in, every row of the cut is
+                  darkened in one pass (0.25, and 0.6 across the words), and the words with a tight dark shadow are
+                  drawn on; the encoder cuts the 3:4 middle as SGMotionClip.m does, so nothing is scaled on the CPU.
+                  The IDs end in m and a tag of the file, so the clip arriving, or a Canvas after an animated cover,
+                  re-offers the line showing. Until it comes, and for a track
+                  with no moving artwork or one that will not read (a turned video), the lines are drawn as Lyrics
+                  draws them, in the chosen style. Rendered on the Mac against harness/lyrics-clip/ (`motion`, over a
+                  bright busy, a dark and any given videos). What reaches the
                   system's now playing through this hook and Player/NowPlayingExtras.x is checked by harness/now-playing/
     AnimatedArtwork/ moving artwork (AnimatedArtwork.h): the track's Canvas, else Apple Music's animated album cover
                   (SGMotionCatalog.m: searched without the album's edition, the edition of the same name first, and
@@ -165,8 +179,10 @@ Shared:
                   shape when it is not, with its still filled to the size asked (SGMotionClip.m), and a change of the
                   choice applies at once, Lyrics too. Switch with the star (spotifyglass.lockscreen.star, off;
                   LockScreenStar.x) puts a star on the lock screen widget, MediaPlayer's like command, whose tap swaps
-                  the choice between the lyrics and the moving artwork it left (Moving artwork or Every song, kept under
-                  spotifyglass.lockscreen.star.back), filled while the lyrics show; the choice is the setting, so the
+                  the choice for the one the star last left (kept under spotifyglass.lockscreen.star.back) when that one
+                  is on the other side, with lyrics or without, else for Lyrics or Moving artwork: Lyrics swaps with the
+                  moving artwork it left (Moving artwork or Every song), and Moving artwork with lyrics counts as lyrics,
+                  so it swaps with Moving artwork. The star is filled while the lyrics show; the choice is the setting, so the
                   mode outlives a relaunch and the page's row follows it. The star takes the slot of Spotify's like
                   and dislike buttons, so their flag is forced off at launch while the switch is on, over the row's
                   own override, and the row shows it locked. The cut and the service's wire format are checked on
@@ -759,8 +775,8 @@ model with the full one, is on the iPhone), Toggle from lyrics (the redesign's m
 Ignore heat warnings, and under Advanced Runs on (Automatic: the Neural Engine
 beside the CPU; CPU only) and Prepare after updates, all applying straight away. Lock screen, on the main
 page under either look, opens the lock screen widget's page, titled Lock screen: Widget (the line in place of the artist,
-and Spotify's like and dislike buttons' flag, locked off while the star is on) then Artwork (Off, Moving artwork, Lyrics
-or Every song, the lyrics' style, Still or Animated, Switch with the star, the sources and Low Data Mode; below iOS 26
+and Spotify's like and dislike buttons' flag, locked off while the star is on) then Artwork (Off, Moving artwork, Lyrics,
+Every song or Moving artwork with lyrics, the lyrics' style, Still or Animated, Switch with the star, the sources and Low Data Mode; below iOS 26
 one row saying why not). Spotify's podcast, audiobook and artwork flags stay in All flags. Player: Gestures and Blocked artists (with the count on the row), which work with either look;
 in the native look also Now playing bar (its device button and its flags), Queue & devices, and
 Spotify's own player screen (artwork background, glass header buttons, Disable Canvas and the sheet,

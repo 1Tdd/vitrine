@@ -3,8 +3,15 @@
 // changes. Nothing is drawn until the lock screen asks for that artwork's video, so lines sung with the
 // screen off cost nothing. It rides on Spotify's now playing info as an extra (NowPlayingExtras.h), like
 // the moving artwork it takes the place of.
+//
+// Moving artwork with lyrics draws the lines over the track's moving artwork instead, which
+// LockScreenMotion.x finds and hands over (SGLyricsArtworkSetMotion): each line's clip is the stretch of it
+// the song is at while the line shows, taken round its length, with the line sung last dimmed above. Until the
+// clip comes, and for a track that has none, the lines are drawn as Lyrics draws them; the clip coming
+// changes every ID, so the line showing is offered again over it.
 #import <MediaPlayer/MediaPlayer.h>
 #import "Core/SGCore.h"
+#import "LockScreenLyrics.h"
 #import "SGLyricsClip.h"
 #import "Shared/AnimatedArtwork/AnimatedArtwork.h"
 #import "Shared/Lyrics/Lyrics.h"
@@ -15,8 +22,25 @@ static const NSTimeInterval kTick = 0.25;
 // Past a line's sung end by this much, with the next line at least this far off, the line is let go and
 // only the next one shows, dimmed (as the artist row does in LockScreenLyrics.x).
 static const NSInteger kBreakMs = 4000;
+// A line's clip over moving artwork lasts from the line's start to the next one's, a second longer for the
+// lock screen showing it late, and between these: the cost of a clip is its length.
+static const double kShortest = 2, kLongest = 8;
+
+// What a line's artwork shows, kept by its request blocks.
+@interface SGLockLine : NSObject
+@property (nonatomic, copy) NSString *previous, *line, *next;   // nil for none
+@property (nonatomic) UIImage *cover;
+@property (nonatomic) SGLyricsClipStyle style;
+@property (nonatomic) NSURL *motion;          // the moving artwork under the words, nil for the blurred cover
+@property (nonatomic) double from, seconds;   // where in the song the clip starts and how long it is
+@end
+
+@implementation SGLockLine
+@end
 
 static dispatch_source_t sg_timer;
+static NSString *sg_motionURI;   // the track the moving artwork is for, and its file (SGLyricsArtworkSetMotion)
+static NSURL *sg_motion;
 static NSString *sg_track;     // the track the clips are for
 static UIImage *sg_cover;      // its cover, once Spotify's now playing info has one for it
 static NSString *sg_shownID;   // the artwork handed over last, nil for none; read on sg_queue too
@@ -70,44 +94,55 @@ static NSURL *clipFile(NSString *artworkID) {
     return [folder() URLByAppendingPathComponent:[artworkID stringByAppendingPathExtension:@"mp4"]];
 }
 
-// On sg_previewQueue.
-static UIImage *previewFor(NSString *artworkID, NSString *line, NSString *next, UIImage *cover, CGSize size) {
+// On sg_previewQueue. Over moving artwork that will not read, the blurred cover's.
+static UIImage *previewFor(NSString *artworkID, SGLockLine *line, CGSize size) {
     UIImage *preview = [sg_previews objectForKey:artworkID];
     if (preview) return preview;
-    CGImageRef backdrop = copyBackdropFor(cover, size);
-    CGImageRef frame = SGLyricsClipFrame(backdrop, line, next, size);
-    CGImageRelease(backdrop);
+    CGImageRef frame = line.motion ? SGLyricsClipMotionFrame(line.motion, line.previous, line.line, line.next, line.from) : NULL;
+    if (!frame) {
+        CGImageRef backdrop = copyBackdropFor(line.cover, size);
+        frame = SGLyricsClipFrame(backdrop, line.line, line.next, size);
+        CGImageRelease(backdrop);
+    }
     if (frame) [sg_previews setObject:(preview = [UIImage imageWithCGImage:frame]) forKey:artworkID];
     CGImageRelease(frame);
     return preview;
 }
 
-// On sg_queue. A clip drawn ahead is found on disk and handed over at once.
-static BOOL writeClip(NSString *artworkID, NSString *line, NSString *next, UIImage *cover, SGLyricsClipStyle style, CGSize size) {
+// On sg_queue. A clip drawn ahead is found on disk and handed over at once. Over moving artwork that will not
+// read, it is drawn over the blurred cover.
+static BOOL writeClip(NSString *artworkID, SGLockLine *line, CGSize size) {
     NSURL *file = clipFile(artworkID);
     if ([NSFileManager.defaultManager fileExistsAtPath:file.path]) return YES;
     CFAbsoluteTime start = CFAbsoluteTimeGetCurrent();
-    CGImageRef backdrop = copyBackdropFor(cover, size);
-    BOOL ok = SGLyricsClipWrite(file, backdrop, line, next, size, style);
-    CGImageRelease(backdrop);
-    // The first few of a launch, and any that fails: one a line would fill the log.
-    static NSUInteger told;
-    if (!ok || told++ < 5) SGLog(@"lock lyrics: %@ %@ in %.0f ms", artworkID, ok ? @"written" : @"not written", (CFAbsoluteTimeGetCurrent() - start) * 1000);
+    BOOL over = line.motion && SGLyricsClipWriteOverMotion(file, line.motion, line.previous, line.line, line.next, line.from, line.seconds);
+    BOOL ok = over;
+    if (!ok) {
+        if (line.motion) SGLog(@"lock lyrics: %@ could not be drawn over %@, drawn over the cover", artworkID, line.motion.lastPathComponent);
+        CGImageRef backdrop = copyBackdropFor(line.cover, size);
+        ok = SGLyricsClipWrite(file, backdrop, line.line, line.next, size, line.style);
+        CGImageRelease(backdrop);
+    }
+    // The first few of a launch of each kind, and any that fails: one a line would fill the log.
+    static NSUInteger told[2];
+    if (!ok || told[over]++ < 5) {
+        SGLog(@"lock lyrics: %@ %@ in %.0f ms%@", artworkID, ok ? @"written" : @"not written", (CFAbsoluteTimeGetCurrent() - start) * 1000,
+              over ? [NSString stringWithFormat:@", up to %.1f s of %@ from %.1f s", line.seconds, line.motion.lastPathComponent, line.from] : @"");
+    }
     return ok;
 }
 
 // The next line's preview and clip, drawn while this one shows: a line change then hands both over at once, where
 // drawing them on request left the lock screen on the plain cover for half a second.
-static void drawAhead(NSString *artworkID, NSString *line, NSString *next, UIImage *cover, SGLyricsClipStyle style) {
+static void drawAhead(NSString *artworkID, SGLockLine *line) {
     CFAbsoluteTime time = CFAbsoluteTimeGetCurrent();
     CGSize size = SGLyricsClipSize(SGMotionPixels());
-    if (time - sg_previewAskedAt <= 15) dispatch_async(sg_previewQueue, ^{ previewFor(artworkID, line, next, cover, size); });
-    if (time - sg_askedAt <= 15) dispatch_async(sg_queue, ^{ writeClip(artworkID, line, next, cover, style, size); });
+    if (time - sg_previewAskedAt <= 15) dispatch_async(sg_previewQueue, ^{ previewFor(artworkID, line, size); });
+    if (time - sg_askedAt <= 15) dispatch_async(sg_queue, ^{ writeClip(artworkID, line, size); });
 }
 
 API_AVAILABLE(ios(26.0))
-static MPMediaItemAnimatedArtwork *artworkFor(NSString *artworkID, NSString *line, NSString *next, UIImage *cover,
-                                              SGLyricsClipStyle style) {
+static MPMediaItemAnimatedArtwork *artworkFor(NSString *artworkID, SGLockLine *line) {
     CGSize size = SGLyricsClipSize(SGMotionPixels());
     return [[MPMediaItemAnimatedArtwork alloc] initWithArtworkID:artworkID
         previewImageRequestHandler:^(CGSize wanted, void (^completion)(UIImage *)) {
@@ -119,7 +154,7 @@ static MPMediaItemAnimatedArtwork *artworkFor(NSString *artworkID, NSString *lin
                 return;
             }
             dispatch_async(sg_previewQueue, ^{
-                completion(previewFor(artworkID, line, next, cover, size));
+                completion(previewFor(artworkID, line, size));
                 static NSUInteger told;
                 if (told++ < 10) SGLog(@"lock lyrics: preview of %@ was not drawn ahead", artworkID);
             });
@@ -132,7 +167,7 @@ static MPMediaItemAnimatedArtwork *artworkFor(NSString *artworkID, NSString *lin
                     completion(nil);
                     return;
                 }
-                completion(writeClip(artworkID, line, next, cover, style, size) ? clipFile(artworkID) : nil);
+                completion(writeClip(artworkID, line, size) ? clipFile(artworkID) : nil);
             });
         }];
 }
@@ -145,6 +180,30 @@ static void clear(void) {
 
 static NSString *textAt(NSArray<SGKaraokeLine *> *lines, NSInteger index) {
     return index >= 0 && index < (NSInteger)lines.count ? SGKaraokeLineText(lines[index]) : nil;
+}
+
+void SGLyricsArtworkSetMotion(NSString *uri, NSURL *file) {
+    sg_motionURI = uri;
+    sg_motion = file;
+}
+
+// What the artwork for line `index` shows, `resting` once its break has come (index -1, before the first line,
+// always rests). Over moving artwork, the stretch of song from when it shows until the next artwork does.
+static SGLockLine *lineAt(NSArray<SGKaraokeLine *> *lines, NSInteger index, BOOL resting, NSURL *motion,
+                          UIImage *cover, SGLyricsClipStyle style) {
+    SGLockLine *shown = [SGLockLine new];
+    // Resting, the line sung is let go and the one coming shows alone.
+    shown.line = resting ? nil : textAt(lines, index);
+    shown.next = textAt(lines, index + 1);
+    shown.previous = motion && !resting ? textAt(lines, index - 1) : nil;
+    shown.cover = cover;
+    shown.style = style;
+    shown.motion = motion;
+    NSInteger start = index < 0 ? 0 : resting ? SGKaraokeSungEnd(lines[index]) + kBreakMs : lines[index].start;
+    NSInteger end = index + 1 < (NSInteger)lines.count ? lines[index + 1].start : index < 0 ? start : SGKaraokeSungEnd(lines[index]) + kBreakMs;
+    shown.from = start / 1000.0;
+    shown.seconds = MIN(MAX((end - start) / 1000.0 + 1, kShortest), kLongest);
+    return shown;
 }
 
 static void tick(void) {
@@ -183,7 +242,13 @@ static void tick(void) {
         BOOL nextFarOff = index + 1 == (NSInteger)lines.count || lines[index + 1].start - position > kBreakMs;
         BOOL resting = index < 0 || (position > SGKaraokeSungEnd(lines[index]) + kBreakMs && nextFarOff);
         SGLyricsClipStyle style = (SGLyricsClipStyle)SGInt(SGKeyLockScreenLyricsStyle, SGLyricsClipStill);
-        NSString *artworkID = [NSString stringWithFormat:@"%@-%ld%@-%ld", trackID, (long)index, resting ? @"r" : @"", (long)style];
+        NSURL *motion = SGLockScreenArtwork() == SGLockArtworkMotionLyrics && [sg_motionURI isEqualToString:SGURIString(state.track.URI)]
+            ? sg_motion : nil;
+        // The look ends the ID: m and a tag of the file over moving artwork, so a Canvas that comes after an animated
+        // cover redraws the line showing too; else the style.
+        NSString *look = motion ? [NSString stringWithFormat:@"m%04lx", (unsigned long)(motion.lastPathComponent.hash & 0xffff)]
+                                : [NSString stringWithFormat:@"%ld", (long)style];
+        NSString *artworkID = [NSString stringWithFormat:@"%@-%ld%@-%@", trackID, (long)index, resting ? @"r" : @"", look];
         if ([artworkID isEqualToString:sg_shownID]) return;
         // Spotify's request block for its cover, read on main and kept once it is this track's.
         if (!sg_cover) {
@@ -193,15 +258,15 @@ static void tick(void) {
                 sg_cover = [artwork imageWithSize:CGSizeMake(600, 600)];
             }
         }
-        // Resting, the line sung is let go and the one coming shows alone.
-        NSString *line = resting ? nil : textAt(lines, index), *next = textAt(lines, index + 1);
         if (![sg_shownID hasPrefix:trackID]) SGLog(@"lock lyrics: lines offered for %@", trackID);
+        if (motion && ![sg_shownID hasSuffix:[@"-" stringByAppendingString:look]]) SGLog(@"lock lyrics: the lines of %@ over %@", trackID, motion.lastPathComponent);
         setShown(artworkID);
-        SGNowPlayingSetExtras(@"lyrics", @{MPNowPlayingInfoProperty3x4AnimatedArtwork: artworkFor(artworkID, line, next, sg_cover, style)},
+        SGNowPlayingSetExtras(@"lyrics", @{MPNowPlayingInfoProperty3x4AnimatedArtwork:
+                                               artworkFor(artworkID, lineAt(lines, index, resting, motion, sg_cover, style))},
                               state.track.trackTitle);
         if (index + 1 < (NSInteger)lines.count) {
-            NSString *ahead = [NSString stringWithFormat:@"%@-%ld-%ld", trackID, (long)index + 1, (long)style];
-            drawAhead(ahead, textAt(lines, index + 1), textAt(lines, index + 2), sg_cover, style);
+            NSString *ahead = [NSString stringWithFormat:@"%@-%ld-%@", trackID, (long)index + 1, look];
+            drawAhead(ahead, lineAt(lines, index + 1, NO, motion, sg_cover, style));
         }
     }
 }
@@ -237,7 +302,7 @@ static void setTicking(BOOL on) {
 // A paused player's line does not move, and the lock screen keeps the clip it was left on. Picked or not is read
 // each time, so a change on the Lock screen page applies at once.
 - (void)playerStateDidChange:(SPTPlayerState *)state {
-    BOOL on = SGLockScreenArtwork() == SGLockArtworkLyrics;
+    BOOL on = SGLockArtworkShowsLyrics(SGLockScreenArtwork());
     setTicking(on && !state.isPaused);
     if (on) tick();
     else clear();
@@ -262,11 +327,11 @@ static void setTicking(BOOL on) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (SGLockScreenArtwork() == choice) return;
                 choice = SGLockScreenArtwork();
-                SGLog(@"lock lyrics: %@", choice == SGLockArtworkLyrics ? @"picked" : @"no longer picked");
+                SGLog(@"lock lyrics: %@", !SGLockArtworkShowsLyrics(choice) ? @"no longer picked" : choice == SGLockArtworkLyrics ? @"picked" : @"picked over the moving artwork");
                 [observer playerStateDidChange:SGPlayerState()];
             });
         }];
-        SGLog(@"lock lyrics: %@, the lock screen takes %@", choice == SGLockArtworkLyrics ? @"on" : @"off",
+        SGLog(@"lock lyrics: %@, the lock screen takes %@", !SGLockArtworkShowsLyrics(choice) ? @"off" : choice == SGLockArtworkLyrics ? @"on" : @"on over the moving artwork",
               MPNowPlayingInfoCenter.supportedAnimatedArtworkKeys);
     }
 }
