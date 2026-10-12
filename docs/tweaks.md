@@ -640,7 +640,7 @@ App:
                    that came over from upstream is left out, so a build without its own has no sheet). The Mod
                    page offers both again. Environment.m says once per install state, a few seconds in, when
                    EeveeSpotify is injected too (a dyld image named so, or its settings page's Swift class) or Spotify is not the version the mod is
-                   supports (SGSpotifySupportedVersions in Onboarding.h: 9.1.78, which it is made for, and 9.1.88) or likely works on (SGSpotifyLikelyWorksVersions: 9.1.90, which ran cleanly in a short test), and when a redesign below iOS 26 did not start, and when the install lacks the app
+                   supports (SGSpotifySupportedVersions in Onboarding.h: 9.1.78, which it is made for, 9.1.88 and 9.1.90) or likely works on (SGSpotifyLikelyWorksVersions, empty now), and when a redesign below iOS 26 did not start, and when the install lacks the app
                    changes the IPA build makes, as with a .deb injected by hand: Spotify's own glass opt-out set (9.1.88's
                    UIDesignRequiresCompatibility, under the redesign), or NSSupportsLiveActivities or MusicHapticsSupported
                    missing, each named in the warning and the last two under Live Activity and Vibrations too; all but
