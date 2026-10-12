@@ -538,9 +538,15 @@ Redesigned:
                   preview of the view playing a song of its own (LyricsLookSettings.m). Laid out on the Mac against
                   harness/lyrics/; the page against harness/lyrics-page/
     Home/         Home decluttered to music on black (an allow list of its sections: shortcuts, the DJ without its heading and
-                  transcript, the shelves of cards), a large title where the filter pills were with the avatar at the trailing
-                  edge, the title rising and fading with the feed as it scrolls, as the Music app's does, the shelves' headings at the Music app's size, each shortcut tile's cover run across it blurred
-                  (SGRPalette's extension), continuous corners on the covers, and in FLEX builds a meter of each scroll's
+                  transcript, the shelves of cards, each with a switch on the Home page of Mod Settings; the previews and the
+                  song suggestions only when switched on), a large title where the filter pills were, the title rising and
+                  fading with the feed as it scrolls, as the Music app's does, the shelves' headings at the Music app's size,
+                  continuous corners on the covers, and, under the Home look switch (the Home page's first row; off, none of
+                  its hooks install and Home is as before it): at the trailing edge a glass pill of the filter (a menu that
+                  drives Spotify's own chips, with the device picker and the top shelf's Show all) and the avatar, Top picks
+                  (the first shelf, or the one Cards from names, moved above the shortcuts and drawn as large cards in their
+                  covers' colors with no heading, the page tinted by the first card) and each shortcut tile as a glass pill
+                  in its cover's color with its name in bold on up to two lines; in FLEX builds a meter of each scroll's
                   frames and the hooks' time (Home.h lists its files)
     Search/       the Browse page decluttered to its category cards (an allow list of the list's cells: the watch feed
                   carousels and promos collapse, and the cards move up by the spacing they leave), the header the way Home
@@ -708,8 +714,8 @@ page. It sorts every
 setting by the part of Spotify it changes, so a part's glass, its hide switches and its flags sit on
 one page, the mod's own rows first and Spotify's flags below them or on a sub page named after what
 they change. Its main page groups the rows by what they are, in cards with no headings as Settings has its own,
-under the signing and environment warnings: Redesigned UI, Appearance and Tab bar, with a restart note; Home & Library
-(in the native look), Player, Lyrics, Albums and Artists; Karaoke, Spatial voice (where the iPhone reads headphone
+under the signing and environment warnings: Redesigned UI, Appearance and Tab bar, with a restart note; Home (Home &
+Library in the native look), Player, Lyrics, Albums and Artists; Karaoke, Spatial voice (where the iPhone reads headphone
 motion), Audio effects, Live Activity, AirPods gestures and Listening stats; Lock screen, Vibrations and Premium, ads &
 privacy; Labs and All flags; Mod. It is checked in the simulator
 against harness/mod-settings/. The Appearance page has, in the native look, AMOLED (the redesign is always black), then the stored look's Accent color

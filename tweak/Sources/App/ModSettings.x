@@ -19,6 +19,7 @@
 #import "Settings/SGPageStyle.h"
 #import "Settings/SGModPage.h"
 #import "Native/Home/Home.h"
+#import "Redesigned/Home/Home.h"
 #import "Shared/AdBlock/AdBlock.h"
 #import "Shared/Flags/Flags.h"
 #import "Shared/AudioEffects/AudioEffectsPage.h"
@@ -73,7 +74,10 @@ static UIViewController *modSettingsPage(void) {
     artists.visible = redesigned;
     SGModRow *home = pageRow(@"Home & Library", @"house.fill", UIColor.systemBrownColor, ^UIViewController *{ return SGHomeSettingsPage(); });
     home.visible = native;
+    SGModRow *redesignedHome = pageRow(@"Home", @"house.fill", UIColor.systemBrownColor, ^UIViewController *{ return SGRHomeSettingsPage(); });
+    redesignedHome.visible = redesigned;
     [sections addObject:SGSection(nil, @[
+        redesignedHome,
         home,
         pageRow(@"Player", @"play.fill", UIColor.systemPinkColor, ^UIViewController *{ return SGPlayerSettingsPage(); }),
         pageRow(@"Lyrics", @"quote.bubble.fill", UIColor.systemOrangeColor, ^UIViewController *{ return SGLyricsSettingsPage(); }),

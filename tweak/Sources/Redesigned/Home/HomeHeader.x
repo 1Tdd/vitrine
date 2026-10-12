@@ -25,7 +25,33 @@
 // Tries at finding the tab's name before settling for the English one: a miss walks the window.
 static const NSUInteger kTitleTries = 8;
 
-static char kTitleKey, kTabKey;
+static char kTitleKey, kTabKey, kPillGlassKey, kGlassKey, kButtonsKey, kConnectKey, kTintKey;
+// The title row's pill: a glass capsule around the filter button and the avatar, 44pt tall, as the reference has
+// it; the menu drives Spotify's own filter chips, hidden in the stack, and offers the device picker when Spotify
+// has one (a now playing bar) and the large shelf's Show all, its heading being gone (HomeTopPicks.x).
+static const CGFloat kPillHeight = 44, kPillButton = 44, kPillPad = 6;
+// The page's color behind the title (SGRHomeSetPageTint), fading to black over this height.
+static const CGFloat kTintHeight = 480;
+
+// The pill's buttons sit above Spotify's stack, which would take every touch in the header otherwise; a touch
+// outside a button goes through to the avatar under them.
+@interface SGRHomePillButtons : UIView
+@property (nonatomic, strong) UIButton *filter;
+@end
+@implementation SGRHomePillButtons
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *hit = [super hitTest:point withEvent:event];
+    return hit == self ? nil : hit;
+}
+@end
+
+@interface SGRHomeTintView : UIView
+@end
+@implementation SGRHomeTintView
++ (Class)layerClass {
+    return CAGradientLayer.class;
+}
+@end
 static NSString *sg_tabName;
 
 static void vanish(UIView *view) {
@@ -80,6 +106,186 @@ static UILabel *titleIn(UIView *header) {
 static __weak UIView *sg_header;
 static __weak UIStackView *sg_stack;
 static __weak UIView *sg_scrim;
+static UIControl *connectButton(UIView *window);
+
+#pragma mark - the pill
+
+// Spotify's filter chips (All, Music, Podcasts, Audiobooks), controls in the stack's hidden pill scroller, in
+// their order there.
+static NSArray<UIControl *> *chips(UIStackView *stack) {
+    NSMutableArray<UIControl *> *found = [NSMutableArray array];
+    SGForEachView(stack, ^(UIView *v) {
+        if ([v.accessibilityIdentifier hasPrefix:@"home-feed-"] && [v isKindOfClass:UIControl.class]) [found addObject:(UIControl *)v];
+    });
+    return [found sortedArrayUsingComparator:^NSComparisonResult(UIView *a, UIView *b) {
+        CGFloat xa = [a convertRect:a.bounds toView:stack].origin.x, xb = [b convertRect:b.bounds toView:stack].origin.x;
+        return xa < xb ? NSOrderedAscending : xa > xb ? NSOrderedDescending : NSOrderedSame;
+    }];
+}
+
+// The chip in effect: selected, or drawn solid with its glass hidden (home-feed-default, trees 2026-10-11).
+static BOOL chosen(UIControl *chip) {
+    if (chip.selected) return YES;
+    __block BOOL solid = NO;
+    SGForEachView(chip, ^(UIView *v) {
+        if ([NSStringFromClass(v.class) containsString:@"ChipGlassView"] && v.hidden) solid = YES;
+    });
+    return solid;
+}
+
+static void press(UIControl *control) {
+    [control sendActionsForControlEvents:UIControlEventTouchUpInside | UIControlEventPrimaryActionTriggered];
+}
+
+static NSArray<UIMenuElement *> *menuElements(void) {
+    NSMutableArray<UIMenuElement *> *elements = [NSMutableArray array];
+    NSMutableArray<UIMenuElement *> *filters = [NSMutableArray array];
+    for (UIControl *chip in chips(sg_stack)) {
+        __weak UIControl *weakChip = chip;
+        UIAction *action = [UIAction actionWithTitle:chip.accessibilityLabel ?: @"" image:nil identifier:nil handler:^(UIAction *a) {
+            if (weakChip) press(weakChip);
+        }];
+        action.state = chosen(chip) ? UIMenuElementStateOn : UIMenuElementStateOff;
+        [filters addObject:action];
+    }
+    if (filters.count) [elements addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:filters]];
+    NSMutableArray<UIMenuElement *> *more = [NSMutableArray array];
+    UIControl *connect = connectButton(sg_header.window);
+    if (connect) {
+        __weak UIControl *weakConnect = connect;
+        [more addObject:[UIAction actionWithTitle:@"Devices" image:[UIImage systemImageNamed:@"hifispeaker"] identifier:nil handler:^(UIAction *a) {
+            if (weakConnect) press(weakConnect);
+        }]];
+    }
+    NSString *title = nil;
+    UIControl *showAll = SGRHomeTopPicksShowAll(&title);
+    if (showAll) {
+        __weak UIControl *weakShowAll = showAll;
+        [more addObject:[UIAction actionWithTitle:title.length ? [NSString stringWithFormat:@"Show all · %@", title] : @"Show all"
+                                            image:[UIImage systemImageNamed:@"rectangle.stack"] identifier:nil handler:^(UIAction *a) {
+            if (weakShowAll) press(weakShowAll);
+        }]];
+    }
+    if (more.count) [elements addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:more]];
+    return elements;
+}
+
+// Spotify's device picker button, in the now playing bar (Components.ConnectButtonOutputSwitcher > UIButton,
+// trees 2026-10-11); nil without a bar.
+static UIControl *connectButton(UIView *window) {
+    UIView *holder = window ? SGRFindByIdentifier(window, @"Components.ConnectButtonOutputSwitcher", &kConnectKey) : nil;
+    __block UIControl *button = [holder isKindOfClass:UIControl.class] ? (UIControl *)holder : nil;
+    if (!button) SGForEachView(holder, ^(UIView *v) {
+        if (!button && [v isKindOfClass:UIControl.class]) button = (UIControl *)v;
+    });
+    return button;
+}
+
+static UIButton *pillButton(NSString *symbol, NSString *label) {
+    UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
+    UIImageSymbolConfiguration *config = [UIImageSymbolConfiguration configurationWithPointSize:17 weight:UIImageSymbolWeightMedium];
+    [button setImage:[UIImage systemImageNamed:symbol withConfiguration:config] forState:UIControlStateNormal];
+    button.tintColor = SGRPrimary();
+    button.accessibilityLabel = label;
+    // The menu takes the appearance of its button; outside Spotify's navigation stacks that is the system's.
+    button.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
+    return button;
+}
+
+static SGRHomePillButtons *buttonsIn(UIView *header) {
+    SGRHomePillButtons *buttons = objc_getAssociatedObject(header, &kButtonsKey);
+    if (!buttons) {
+        buttons = [SGRHomePillButtons new];
+        buttons.filter = pillButton(@"line.3.horizontal.decrease", @"Filter Home");
+        buttons.filter.menu = [UIMenu menuWithChildren:@[[UIDeferredMenuElement elementWithUncachedProvider:^(void (^completion)(NSArray<UIMenuElement *> *)) {
+            completion(menuElements());
+        }]]];
+        buttons.filter.showsMenuAsPrimaryAction = YES;
+        [buttons addSubview:buttons.filter];
+        objc_setAssociatedObject(header, &kButtonsKey, buttons, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    if (buttons.superview != header) [header addSubview:buttons];
+    else if (header.subviews.lastObject != buttons) [header bringSubviewToFront:buttons];
+    return buttons;
+}
+
+static UIView *glassIn(UIView *header) {
+    UIView *glass = objc_getAssociatedObject(header, &kGlassKey);
+    if (!glass) {
+        glass = [UIView new];
+        glass.userInteractionEnabled = NO;
+        objc_setAssociatedObject(header, &kGlassKey, glass, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    if (glass.superview != header) [header insertSubview:glass atIndex:0];
+    else if (header.subviews.firstObject != glass) [header sendSubviewToBack:glass];
+    return glass;
+}
+
+// Lays the pill out around the avatar, which stays Spotify's in its stack; the pill's leading edge.
+static CGFloat layoutPill(UIView *header, UIStackView *stack, UIView *face) {
+    SGRHomePillButtons *buttons = buttonsIn(header);
+    UIView *glass = glassIn(header);
+    CGRect faceFrame = face ? [stack convertRect:face.frame toView:header] : CGRectZero;
+    CGFloat width = kPillPad + kPillButton + (face ? faceFrame.size.width + kPillPad * 2 : kPillPad);
+    CGFloat maxX = face ? CGRectGetMaxX(faceFrame) + kPillPad : header.bounds.size.width - SGRSideMargin;
+    CGFloat midY = face ? CGRectGetMidY(faceFrame) : CGRectGetMidY(stack.frame);
+    CGRect pill = CGRectMake(round(maxX - width), round(midY - kPillHeight / 2), width, kPillHeight);
+    if (!CGRectEqualToRect(glass.frame, pill)) glass.frame = pill;
+    if (!CGRectEqualToRect(buttons.frame, pill)) buttons.frame = pill;
+    CGRect filter = CGRectMake(kPillPad, 0, kPillButton, kPillHeight);
+    if (!CGRectEqualToRect(buttons.filter.frame, filter)) buttons.filter.frame = filter;
+    SGRGlassCapsuleInside(glass, &kPillGlassKey, pill.size, NO);
+    return CGRectGetMinX(pill);
+}
+
+#pragma mark - the page's color
+
+static UIColor *sg_pageTint;
+static __weak SGRHomeTintView *sg_tintView;
+
+static void paintTint(SGRHomeTintView *tint, BOOL animated) {
+    CAGradientLayer *layer = (CAGradientLayer *)tint.layer;
+    UIColor *top = sg_pageTint ?: UIColor.blackColor;
+    NSArray *colors = @[(id)top.CGColor, (id)[top colorWithAlphaComponent:0].CGColor];
+    if ([layer.colors isEqualToArray:colors]) return;
+    if (animated && tint.window) {
+        CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"colors"];
+        fade.fromValue = layer.colors;
+        fade.duration = SGRCrossfade;
+        [layer addAnimation:fade forKey:@"colors"];
+    }
+    layer.colors = colors;
+}
+
+void SGRHomeSetPageTint(UIColor *color) {
+    if (color == sg_pageTint || [color isEqual:sg_pageTint]) return;
+    sg_pageTint = color;
+    if (sg_tintView) paintTint(sg_tintView, YES);
+}
+
+// The gradient at the back of the page's view (HomePageView, which holds the feed), the feed's own black cleared so
+// it shows through behind the title and the first shelf; the shelves clear theirs (HomeSections.x).
+static void layoutTint(UIView *view) {
+    __block UIView *page = sg_tintView.superview;
+    if (!page) SGForEachView(view, ^(UIView *v) {
+        if (!page && [v.accessibilityIdentifier hasPrefix:@"HomePageView"]) page = v;
+    });
+    if (!page) return;
+    SGRHomeTintView *tint = objc_getAssociatedObject(page, &kTintKey);
+    if (!tint) {
+        tint = [SGRHomeTintView new];
+        tint.userInteractionEnabled = NO;
+        objc_setAssociatedObject(page, &kTintKey, tint, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        sg_tintView = tint;
+        paintTint(tint, NO);
+    }
+    if (tint.superview != page) [page insertSubview:tint atIndex:0];
+    CGRect frame = CGRectMake(0, 0, page.bounds.size.width, kTintHeight);
+    if (!CGRectEqualToRect(tint.frame, frame)) tint.frame = frame;
+    for (UIView *sub in page.subviews) {
+        if ([sub isKindOfClass:UICollectionView.class] && ![sub.backgroundColor isEqual:UIColor.clearColor]) sub.backgroundColor = UIColor.clearColor;
+    }
+}
 
 static BOOL findHeader(UIView *view) {
     if (sg_stack && [sg_stack isDescendantOfView:view]) return YES;
@@ -161,6 +367,12 @@ static void layoutHeader(UIViewController *page) {
         [stack setNeedsLayout];
     }
     [stack layoutIfNeeded];
+    // With the Home look off, the avatar stands alone in the stack and the title ends before it, as before.
+    CGFloat pillLeading = face ? CGRectGetMinX([stack convertRect:face.frame toView:header]) : header.bounds.size.width - SGRSideMargin + SGRGrid;
+    if (SGRHomeLook()) {
+        pillLeading = layoutPill(header, stack, face);
+        layoutTint(view);
+    }
 
     UILabel *title = titleIn(header);
     NSString *text = tabName(header.window);
@@ -171,7 +383,7 @@ static void layoutHeader(UIViewController *page) {
     UIFont *font = SGRFont(UIFontTextStyleLargeTitle, UIFontWeightBold, UIContentSizeCategoryLarge);
     if (![title.font isEqual:font]) title.font = font;
 
-    CGFloat trailing = face ? CGRectGetMinX([stack convertRect:face.frame toView:header]) - SGRGrid : header.bounds.size.width - SGRSideMargin;
+    CGFloat trailing = pillLeading - SGRGrid;
     CGFloat height = ceil(font.lineHeight);
     CGRect frame = CGRectMake(SGRSideMargin, round(CGRectGetMidY(stack.frame) - height / 2), MAX(0, trailing - SGRSideMargin), height);
     // By bounds and center: the title carries the scroll's transform.

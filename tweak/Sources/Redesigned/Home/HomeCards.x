@@ -49,14 +49,19 @@ static void calmDJ(UIView *card) {
 
 static void style(UIView *button) {
     NSString *identifier = button.accessibilityIdentifier;
+    // Spotify reuses a button across kinds (a tile's became a shelf card on the phone, 2026-10-11): what the other
+    // kind put on it comes off first.
     if ([identifier isEqualToString:@"Shortcut.Card.Home"]) {
-        roundCorners(button, SGRRadiusCover);
-        if (button.superview.layer.cornerRadius > 0) roundCorners(button.superview, SGRRadiusCover);
+        SGRHomeStyleLargeCard(button);
+        CGFloat radius = SGRHomeLook() ? SGRHomeTileRadius : SGRRadiusCover;
+        roundCorners(button, radius);
+        if (button.superview.layer.cornerRadius > 0) roundCorners(button.superview, radius);
         SGRHomeStyleTile(button);
         return;
     }
     if ([identifier isEqualToString:@"Components.UI.HomeCard"]) {
-        roundCover(button);
+        SGRHomeUnstyleTile(button);
+        if (!SGRHomeStyleLargeCard(button)) roundCover(button);
         return;
     }
     static Class dj;
@@ -78,11 +83,79 @@ static void style(UIView *button) {
 }
 %end
 
+// Spotify gives a reused card or tile its new text, and a feed switched by the filter its new cards, without
+// laying the button out again: a label of its own (Encore.Label-internal, the tile title's -internal) given text
+// under a card or tile marks the button, so the next layout pass styles it with the text as it is then. Spotify's
+// SPTEncoreLabel is KVO-observed, so the Kit's per-instance observers cannot take it (SGRRestyle.h).
+static void relayoutButtonAround(UIView *view);
+
+static void retextedUnder(UIView *label) {
+    CFTimeInterval began = SGRHomeProbeBegin();
+    BOOL ours = [label.accessibilityIdentifier hasSuffix:@"-internal"] || [label.accessibilityIdentifier hasSuffix:@".playback"];
+    if (ours) relayoutButtonAround(label);
+    SGRHomeProbeEnd(SGRHomeProbeLabels, began);
+    if (ours) SGRHomeProbeEnd(SGRHomeProbeLabelsMatched, began);
+}
+
+static void relayoutButtonAround(UIView *label) {
+    static Class backing;
+    if (!backing) backing = NSClassFromString(@"_TtC19LegacyUI_ECMCoreKit31InteractableLayoutBackingButton");
+    UIView *button = label.superview;
+    for (NSUInteger depth = 0; button && depth < 16 && ![button isKindOfClass:backing]; depth++) button = button.superview;
+    if (![button isKindOfClass:backing]) return;
+    NSString *identifier = button.accessibilityIdentifier;
+    if ([identifier isEqualToString:@"Shortcut.Card.Home"] || [identifier isEqualToString:@"Components.UI.HomeCard"]) [button setNeedsLayout];
+}
+
+// The hooks the Home look needs (SGRKeyHomeLook): none of them install while it is off.
+%group SGRHomeLook
+
+// The tile's playing indicator is placed by Spotify's row after the tile's own pass; its placing asks for the
+// tile's pass again, so HomeTiles.m moves it to the trailing edge from where Spotify put it.
+%hook _TtC11Home_ECMKit36ShortcutCardHomePlayingIndicatorView
+- (void)setFrame:(CGRect)frame {
+    %orig;
+    CFTimeInterval began = SGRHomeProbeBegin();
+    relayoutButtonAround((UIView *)self);
+    SGRHomeProbeEnd(SGRHomeProbeFrames, began);
+}
+%end
+
+// A card's cover holder is laid out to the card by Spotify's own Encore.Card pass, after the button's; the large
+// card (HomeTopPicks.x) sizes its cover from that, so the pass is asked for again when the card's inner view is placed.
+%hook _TtCE19Encore_StackViewKitO16EncoreFoundation6Encore15PassthroughView
+- (void)setFrame:(CGRect)frame {
+    %orig;
+    CFTimeInterval began = SGRHomeProbeBegin();
+    relayoutButtonAround((UIView *)self);
+    SGRHomeProbeEnd(SGRHomeProbeFrames, began);
+}
+%end
+
+%hook UILabel
+- (void)setText:(NSString *)text {
+    %orig;
+    retextedUnder((UIView *)self);
+}
+- (void)setAttributedText:(NSAttributedString *)text {
+    %orig;
+    retextedUnder((UIView *)self);
+}
+%end
+
+%end   // SGRHomeLook
+
 %ctor {
     if (!SGRedesignedUI()) return;
     %init;
     SGRequireClasses(@[
         @"_TtC19LegacyUI_ECMCoreKit31InteractableLayoutBackingButton",
         @"_TtC30Discovery_MediumDensityCardKit9DJMDCView",
+    ]);
+    if (!SGRHomeLook()) return;
+    %init(SGRHomeLook);
+    SGRequireClasses(@[
+        @"_TtC11Home_ECMKit36ShortcutCardHomePlayingIndicatorView",
+        @"_TtCE19Encore_StackViewKitO16EncoreFoundation6Encore15PassthroughView",
     ]);
 }
