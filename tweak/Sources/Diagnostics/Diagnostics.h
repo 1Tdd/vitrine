@@ -25,4 +25,6 @@ void SGSetPlayerSpeed(double speed);
 void SGSetSingOn(BOOL on);
 // Defined in Shared/Lossless/LosslessProbe.m: lossless anchor --path P, check, stop. Nil with *error on failure.
 NSDictionary *SGLosslessProbe(NSString *verb, NSDictionary *p, NSString **error);
+// Defined in Shared/AutoMix/AutoMix.x: Spotify's Automix and Crossfade settings, read or written.
+NSDictionary *SGAutoMixProbeCommand(NSDictionary *p, NSString **error);
 #endif
