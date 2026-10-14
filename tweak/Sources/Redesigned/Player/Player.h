@@ -78,6 +78,8 @@ void SGRPlayerSetCoverHidden(BOOL hidden);
 
 // Whether the playing track has lyrics the player can show.
 BOOL SGRPlayerLyricsAvailable(void);
+// Whether the playing track has none: its grace is over and nothing is looking for them any more.
+BOOL SGRPlayerLyricsNone(void);
 // Whether the player is showing them.
 BOOL SGRPlayerLyricsOpen(void);
 // Shows them, or puts the cover back; does nothing when there are none to show.
@@ -110,6 +112,8 @@ void SGRPlayerPaintCover(UIView *stack);
 // until switched off. Shown or put away by hand for the harness.
 #define SGRKeyLyricsLandscape @"spotifyglass.redesign.lyrics.landscape"
 void SGRPlayerShowLandscape(BOOL show);
+// The playing track's lines came in, or turned out to be none: the landscape screen lays out for it.
+void SGRPlayerLandscapeLinesChanged(void);
 
 // The animated artwork follows the lyrics: blurred behind them (PlayerMotion.x).
 void SGRPlayerMotionLyricsChanged(void);

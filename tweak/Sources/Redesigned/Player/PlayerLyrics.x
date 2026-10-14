@@ -655,8 +655,6 @@ static void setOpen(BOOL open, BOOL animated) {
     else {
         [sg_rest invalidate];
         sg_rest = nil;
-        // The landscape screen shows these lines, so it goes with them (a track without lyrics came on).
-        SGRPlayerShowLandscape(NO);
     }
     SGLog(@"redesign player: lyrics %@, thumbnail %.0fx%.0f at %.0f,%.0f, title row up %.0f and right %.0f, lines %.0fx%.0f",
           open ? @"up" : @"away", l.thumb.size.width, l.thumb.size.height, l.thumb.origin.x, l.thumb.origin.y,
@@ -714,6 +712,8 @@ static void replace(void) {
 // The bar morphs back out of a full size cover as the player closes, so the thumbnail is put away first.
 - (void)viewWillDisappear:(BOOL)animated {
     if (sg_open) setOpen(NO, NO);
+    // The landscape screen outlives the lines for a track without lyrics, but not the player.
+    SGRPlayerShowLandscape(NO);
     %orig;
 }
 %end
@@ -799,6 +799,11 @@ static void replace(void) {
     if (![note.object isEqual:SGKaraokePlayingTrack()]) return;
     if (SGRPlayerLyricsAvailable()) SGRPlayerLyricsChanged();
     else [self closeIfNone];
+    SGRPlayerLandscapeLinesChanged();
+}
+
+- (BOOL)none {
+    return _graceOver && !SGRPlayerLyricsAvailable() && !SGKaraokeLooking(SGKaraokePlayingTrack());
 }
 
 // The lines go once the grace is over and nothing is looking for the track's own any more.
@@ -827,12 +832,17 @@ static void replace(void) {
         if (![self->_track isEqualToString:track]) return;
         self->_graceOver = YES;
         [self closeIfNone];
+        SGRPlayerLandscapeLinesChanged();
     });
 }
 
 @end
 
 static SGRPlayerLyricsWatcher *sg_watcher;
+
+BOOL SGRPlayerLyricsNone(void) {
+    return [sg_watcher none];
+}
 
 %ctor {
     if (!SGRedesignedUI()) return;
