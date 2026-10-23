@@ -14,6 +14,11 @@ extern NSNotificationName const SGLyricsTranslationsDidChangeNotification;
 #define SGKeyLyricsTranslateEverySong @"spotifyglass.lyrics.translateEverySong"
 SGModRow *SGTranslateEverySongRow(void);
 
+// Off: the translate menu leaves out Apple's Translate, or Apple Intelligence. Both on until switched off.
+#define SGKeyLyricsTranslateOnDevice @"spotifyglass.lyrics.translateOnDevice"
+#define SGKeyLyricsAppleIntelligence @"spotifyglass.lyrics.appleIntelligence"
+NSArray<SGModRow *> *SGOnDeviceTranslatorRows(void);
+
 // The AI translator: a provider's id (gemini, openai, anthropic; unset: gemini), the prompt every provider gets
 // (unset: Vitrine's), and per provider spotifyglass.lyrics.<id>.model. An OpenAI-compatible server (unset: OpenAI's)
 // is kept in the Keychain beside its key, not here. All read at each translation.

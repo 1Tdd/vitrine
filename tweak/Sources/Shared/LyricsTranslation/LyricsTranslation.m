@@ -512,6 +512,13 @@ static void translatorChanged(void) {
     [NSNotificationCenter.defaultCenter postNotificationName:SGLyricsTranslationsDidChangeNotification object:nil];
 }
 
+NSArray<SGModRow *> *SGOnDeviceTranslatorRows(void) {
+    SGModRow *onDevice = SGSwitchRow(@"Translate on iPhone", @"Apple's Translate in the lyrics' translate menu", SGKeyLyricsTranslateOnDevice);
+    SGModRow *intelligence = SGSwitchRow(@"Apple Intelligence", @"Apple Intelligence in the lyrics' translate menu", SGKeyLyricsAppleIntelligence);
+    onDevice.changed = intelligence.changed = ^(BOOL on) { translatorChanged(); };
+    return @[onDevice, intelligence];
+}
+
 void SGAIForgetKeys(void) {
     // One delete per provider's own service, every account in it (key and server), never another app's items.
     for (NSUInteger i = 0; i < kProviderCount; i++) {
