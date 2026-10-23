@@ -33,7 +33,7 @@ NSArray<SGModRow *> *SGOnDeviceTranslatorRows(void);
 @property (nonatomic, copy, readonly) NSString *by, *model;
 @property (nonatomic, readonly) NSDate *made;   // nil: not known
 + (instancetype)by:(NSString *)by model:(NSString *)model made:(NSDate *)made;
-@property (nonatomic, readonly) NSString *name;   // "Gemini (gemini-flash-latest)", "Translate on iPhone", "Unknown"
+@property (nonatomic, readonly) NSString *name;   // "Gemini (gemini-3.6-flash)", "Translate on iPhone", "Unknown"
 @property (nonatomic, readonly) BOOL deletable;   // made by an AI provider, or by no one known
 @end
 
