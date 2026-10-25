@@ -7,6 +7,9 @@
 // It sits in Spotify's bottom stack, outside its arranged views, between the controls and the footer row, so the
 // lyrics fade it with the rest of the stack (PlayerLyrics.x) and its touches stay inside the stack. The footer's
 // lowerRow (PlayerFooter.x) places it after the moves, and keeps the controls where Spotify put them to make the room.
+// The stack's own layout runs that pass again (SGRObserveLayout): the stack moves its arranged views around with no pass
+// of the footer (the lyrics, a track whose title wraps, a row that comes or goes), and the row stayed where the stack
+// once had them, over the controls (continuous/1.txt: the row at 188 of a stack whose controls end at 212).
 #import <AVFoundation/AVFoundation.h>
 #import <MediaPlayer/MediaPlayer.h>
 #import <QuartzCore/QuartzCore.h>
@@ -39,6 +42,8 @@ static UIImageView *glyph(NSString *symbol) {
 }
 
 @interface SGRVolumeRow : UIControl
+// The footer row it was last placed against, for the stack's layout. Weak: the stack owns it.
+@property (nonatomic, weak) UIView *footer;
 - (UISlider *)systemSlider;
 - (void)systemSliderSet;
 @end
@@ -357,8 +362,14 @@ BOOL SGRPlayerPlaceVolume(UIView *stack, UIView *controls, UIView *row, CGFloat 
     if (!volume) {
         volume = [SGRVolumeRow new];
         objc_setAssociatedObject(stack, &kVolumeKey, volume, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        SGRObserveLayout(stack, ^(UIView *laidOut) {
+            SGRVolumeRow *placed = objc_getAssociatedObject(laidOut, &kVolumeKey);
+            UIView *footer = placed.footer;
+            if (footer.superview == laidOut) SGRPlayerLowerRow(footer);
+        });
     }
     if (volume.superview != stack) [stack addSubview:volume];
+    volume.footer = row;
     // Halfway between the play button's bottom and the footer glyphs' top, each where it is drawn (convertRect: takes
     // the moves' transforms in). Without the button there is nothing to stand under: a guess from the controls' unit
     // put the row across the buttons on an iPhone 13 Pro with iOS 17 (issue #32) and took their taps, so no row.
